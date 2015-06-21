@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<project>
+	<meta title="strafe" package="io.strafe" version="1.0.0" company="MonsterFace Games"/>
+	<app main="Main" path="bin" file="strafe"/>
+	<app path="bin-profile" if="profile"/>
+	<app path="bin-cputrace" if="cputrace"/>
+	<!--haxeflag name="--no-inline" if="advanced-telemetry"/-->
+
+	<window fps="60" background="0x000000"/>
+	<window width="480" height="480"/>
+	<!--window width="0" height="0" if="mobile"/-->
+	<window orientation="landscape" vsync="true"/>
+	<window resizable="true"/>
+
+    <haxeflag name="-swf-version" value="11.3" if="flash"/>
+
+	<source path="src"/>
+
+	<haxelib name="format"/>
+	<haxelib name="systools" if="native"/>
+	<haxelib name="openfl"/>
+	<haxelib name="strafe-core" path="../"/>
+
+    <assets path="assets"/>
+</project>
