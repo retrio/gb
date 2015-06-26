@@ -17,16 +17,17 @@ class Cart
 	public var romSize:Int;
 	public var ramSize:Int;
 
+	public var cpu:CPU;
 	public var mbc:MBC;
+	public var video:Video;
 
-	public var rom1:ByteString;	// fixed ROM bank
-	public var rom2:ByteString;	// switchable ROM bank
+	public var rom1:ByteString;		// fixed ROM bank
+	public var rom2:ByteString;		// switchable ROM bank
 
-	public var vram:ByteString;	// video RAM
 	public var ram:ByteString;		// external RAM
 	public var wram1:ByteString;	// fixed work RAM
 	public var wram2:ByteString;	// switchable work RAM
-	public var oam:ByteString;		// object attribute memory
+	public var hram:ByteString;		// HRAM
 
 	public var romBanks:Vector<ByteString>;
 	public var ramBanks:Vector<ByteString>;
@@ -35,10 +36,15 @@ class Cart
 	public function new(file:FileWrapper)
 	{
 		// initial memory allocation
-		vram = new ByteString(0x2000);
-		oam = new ByteString(0xa0);
+		hram = new ByteString(0x200);
+		hram.fillWith(0);
+
 		wramBanks = new Vector(8);
-		for (i in 0 ... 8) wramBanks[i] = new ByteString(0x1000);
+		for (i in 0 ... 8)
+		{
+			wramBanks[i] = new ByteString(0x1000);
+			wramBanks[i].fillWith(0);
+		}
 		wram1 = wramBanks[0];
 		wram2 = wramBanks[1];
 
@@ -113,11 +119,14 @@ class Cart
 			case 5: 0x10000;
 			default: 0;
 		}
-		ramBanks = new Vector(Math.ceil(ramSize/0x2000));
-		for (i in 0 ... ramBanks.length) ramBanks[i] = new ByteString(0x2000);
+		var ramBankCount = Std.int(Math.max(Math.ceil(ramSize/0x2000), 1));
+		ramBanks = new Vector(ramBankCount);
+		for (i in 0 ... ramBankCount)
+		{
+			ramBanks[i] = new ByteString(0x2000);
+			ramBanks[i].fillWith(0);
+		}
 		ram = ramBanks[0];
-
-		trace(StringTools.hex(romSize), StringTools.hex(ramSize));
 
 		japan = rom1[0x14a] == 0;
 		version = rom1[0x14c];
@@ -126,9 +135,18 @@ class Cart
 		globalChecksum = (rom1[0x14e] << 8) | rom1[0x14f];
 	}
 
-	public inline function read(addr:Int):Int
+	public function init(video:Video)
 	{
-		trace("READ", StringTools.hex(addr));
+		this.video = video;
+
+		for (key in _regs.keys())
+		{
+			write(key, _regs[key]);
+		}
+	}
+
+	public function read(addr:Int):Int
+	{
 		switch (addr & 0xF000)
 		{
 			case 0x0000, 0x1000, 0x2000, 0x3000:
@@ -136,49 +154,53 @@ class Cart
 			case 0x4000, 0x5000, 0x6000, 0x7000:
 				return rom2[addr-0x4000];
 			case 0x8000, 0x9000:
-				return vram[addr-0x8000];
+				return video.vramRead(addr);
 			case 0xa000, 0xb000:
 				return ram[addr-0xa000];
 			case 0xc000:
 				return wram1[addr-0xc000];
 			case 0xd000:
-				return wram2[addr-0xc000];
+				return wram2[addr-0xd000];
 			case 0xe000:
 				return wram1[addr-0xe000];
 			case 0xf000:
 				if (addr < 0xfe00)
+				{
 					return wram2[addr-0xf000];
+				}
 				else if (addr < 0xfea0)
 				{
-					return oam[addr - 0xfe00];
+					return video.oam[addr - 0xfe00];
 				}
 				else if (addr < 0xff00)
 				{
 					throw "Bad read: " + StringTools.hex(addr, 4);
 				}
+				else if (addr < 0xff40)
+				{
+					// TODO: non-video IO
+					return 0;
+				}
 				else if (addr < 0xff80)
 				{
-					// TODO: io registers
-					throw "not implemented yet";
+					return video.ioRead(addr);
 				}
 				else if (addr < 0xffff)
 				{
-					// TODO: HRAM
-					throw "not implemented yet";
+					return hram[addr - 0xff80];
 				}
 				else
 				{
-					// TODO: interrupts enable
-					throw "not implemented yet";
+					return cpu.interruptsEnabledFlag;
 				}
 			default:
 				throw "Bad read: " + StringTools.hex(addr, 4);
 		}
 	}
 
-	public inline function write(addr:Int, value:Int):Void
+	public function write(addr:Int, value:Int):Void
 	{
-		trace("WRITE", StringTools.hex(addr));
+		//trace(StringTools.hex(addr), StringTools.hex(value));
 		switch (addr & 0xF000)
 		{
 			case 0x0000, 0x1000, 0x2000, 0x3000,
@@ -186,44 +208,81 @@ class Cart
 				mbc.write(addr, value);
 
 			case 0x8000, 0x9000:
-				vram.set(addr-0x8000, value);
+				video.vramWrite(addr, value);
 			case 0xa000, 0xb000:
 				ram.set(addr-0xa000, value);
 			case 0xc000:
 				wram1.set(addr-0xc000, value);
 			case 0xd000:
-				wram2.set(addr-0xc000, value);
+				wram2.set(addr-0xd000, value);
 			case 0xe000:
 				wram1.set(addr-0xe000, value);
 			case 0xf000:
 				if (addr < 0xfe00)
+				{
 					wram2.set(addr-0xf000, value);
+				}
 				else if (addr < 0xfea0)
 				{
-					oam.set(addr - 0xfe00, value);
+					video.oam.set(addr - 0xfe00, value);
 				}
 				else if (addr < 0xff00)
 				{
 					throw "Bad write: " + StringTools.hex(addr, 4);
 				}
+				else if (addr < 0xff40)
+				{
+					// TODO: non-video IO
+				}
 				else if (addr < 0xff80)
 				{
-					// TODO: io registers
-					throw "not implemented yet";
+					video.ioWrite(addr, value);
 				}
 				else if (addr < 0xffff)
 				{
-					// TODO: HRAM
-					throw "not implemented yet";
+					hram.set(addr - 0xff80, value);
 				}
 				else
 				{
-					// TODO: interrupts enable
-					throw "not implemented yet";
+					cpu.interruptsEnabledFlag = value;
 				}
 
 			default:
 				throw "Bad write: " + StringTools.hex(addr, 4);
 		}
 	}
+
+	static var _regs:Map<Int, Int> = [
+		0xff05 => 0x00,
+		0xff06 => 0x00,
+		0xff07 => 0x00,
+		0xff10 => 0x80,
+		0xff11 => 0xbf,
+		0xff12 => 0xf3,
+		0xff14 => 0xbf,
+		0xff16 => 0x3f,
+		0xff17 => 0x00,
+		0xff19 => 0xbf,
+		0xff1a => 0x7f,
+		0xff1b => 0xff,
+		0xff1c => 0x9f,
+		0xff1e => 0xbf,
+		0xff20 => 0xff,
+		0xff21 => 0x00,
+		0xff22 => 0x00,
+		0xff23 => 0xbf,
+		0xff24 => 0x77,
+		0xff25 => 0xf3,
+		0xff26 => 0xf0,
+		0xff40 => 0x91,
+		0xff42 => 0x00,
+		0xff43 => 0x00,
+		0xff45 => 0x00,
+		0xff47 => 0xfc,
+		0xff48 => 0xff,
+		0xff49 => 0xff,
+		0xff4a => 0x00,
+		0xff4b => 0x00,
+		0xffff => 0x00,
+	];
 }

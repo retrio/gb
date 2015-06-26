@@ -3,33 +3,40 @@ package strafe.emu.gb;
 import haxe.ds.Vector;
 
 
+@:build(strafe.macro.Optimizer.build())
 class CPU
 {
 	public var cart:Cart;
+	public var video:Video;
 
+	public var cycleCount:Int = 0;
 	public var cycles:Int = 0;
 
 	var ticks:Int = 0;
 
-	var a:Int = 0;
-	var b:Int = 0;
-	var c:Int = 0;
-	var d:Int = 0;
-	var e:Int = 0;
-	var h:Int = 0;
-	var l:Int = 0;
+#if cputrace
+	var log:String;
+#end
 
-	var sp:Int = 0;
-	var pc:Int = 0;
+	var a:Int = 0x01;
+	var b:Int = 0x00;
+	var c:Int = 0x13;
+	var d:Int = 0x00;
+	var e:Int = 0xd8;
+	var h:Int = 0x01;
+	var l:Int = 0x4d;
 
-	var cf:Bool = false;		// carry flag
-	var hf:Bool = false;		// half carry flag
-	var sf:Bool = false;		// subtract flag
-	var zf:Bool = false;		// zero flag
+	var sp:Int = 0xfffe;
+	var pc:Int = 0x100;
+
+	var cf:Bool = true;		// carry flag
+	var hf:Bool = true;		// half carry flag
+	var sf:Bool = false;	// subtract flag
+	var zf:Bool = true;		// zero flag
 
 	var f(get, set):Int;
-	function get_f() return (zf ? 0x80 : 0) | (sf ? 0x40 : 0) | (hf ? 0x20 : 0) | (cf ? 0x10 : 0);
-	function set_f(byte:Int)
+	inline function get_f() return (zf ? 0x80 : 0) | (sf ? 0x40 : 0) | (hf ? 0x20 : 0) | (cf ? 0x10 : 0);
+	inline function set_f(byte:Int)
 	{
 		cf = Util.getbit(byte, 4);
 		hf = Util.getbit(byte, 5);
@@ -71,46 +78,111 @@ class CPU
 		return byte;
 	}
 
-	public function new() {}
+	var ime:Bool = true;					// interrupt master enable
+	var interruptsRequested:Vector<Bool>;
+	var interruptsEnabled:Vector<Bool>;
 
-	public function init(cart:Cart)
+	public var interruptsEnabledFlag(get, set):Int;
+	inline function get_interruptsEnabledFlag()
 	{
-		this.cart = cart;
-
-		a = 0x01;
-		f = 0xb0;
-		b = 0x00;
-		c = 0x13;
-		d = 0x00;
-		e = 0xd8;
-		h = 0x01;
-		l = 0x4d;
-
-		cf = hf = zf = true;
-
-		sp = 0xfffe;
-		pc = 0x100;
+		return (interruptsEnabled[0] ? 0x1 : 0) |
+			(interruptsEnabled[1] ? 0x2 : 0) |
+			(interruptsEnabled[2] ? 0x4 : 0) |
+			(interruptsEnabled[3] ? 0x8 : 0) |
+			(interruptsEnabled[4] ? 0x10 : 0);
+	}
+	inline function set_interruptsEnabledFlag(v:Int)
+	{
+		@unroll for (i in 0 ... 5) interruptsEnabled[i] = Util.getbit(v, i);
+		return v;
 	}
 
-	public function runCycle()
+	public function new()
 	{
-		if (cycles-- <= 0)
+		interruptsEnabled = new Vector(5);
+		for (i in 0 ... interruptsEnabled.length) interruptsEnabled[i] = false;
+		interruptsRequested = new Vector(5);
+		for (i in 0 ... interruptsRequested.length) interruptsRequested[i] = false;
+		interruptsRequested[Interrupt.Vblank] = true;
+	}
+
+	public function init(cart:Cart, video:Video)
+	{
+		this.cart = cart;
+		cart.cpu = this;
+		this.video = video;
+	}
+
+	public function irq(interruptType:Interrupt)
+	{
+		interruptsRequested[interruptType] = true;
+	}
+
+	public function runFrame()
+	{
+		video.stolenCycles = 0;
+		while (!video.finished)
 		{
-			var op = readpc();
-			pc &= 0xffff;
+			runCycle();
 
-			trace(StringTools.hex(pc, 4), StringTools.hex(op, 2));
-
-			runOp(op);
-			cycles += ticks;
+			var projScanline = video.scanline + ((video.cycles + cycles) / 456);
+			if (projScanline > video.scanline)
+			{
+				video.catchUp();
+			}
 		}
+		video.finished = false;
+	}
+
+	inline function runCycle()
+	{
+#if cputrace
+		log = StringTools.hex(cycleCount, 8).toLowerCase();
+		log += " L" + StringTools.hex(video.scanline, 2).toLowerCase();
+		log += " PC:" + StringTools.hex(pc, 4).toLowerCase();
+#end
+		var op = readpc();
+#if cputrace
+		log += " OP:" + StringTools.hex(op, 2).toLowerCase();
+		log += " AF:" + StringTools.hex(af, 4).toLowerCase();
+		log += " BC:" + StringTools.hex(bc, 4).toLowerCase();
+		log += " DE:" + StringTools.hex(de, 4).toLowerCase();
+		log += " HL:" + StringTools.hex(hl, 4).toLowerCase();
+		log += " SP:" + StringTools.hex(sp, 4).toLowerCase();
+#end
+
+		runOp(op);
+
+		if (ime)
+		{
+			var interrupted = false;
+			@unroll for (i in 0 ... 5)
+			{
+				if (!interrupted && interruptsEnabled[i] && interruptsRequested[i])
+				{
+					interrupt(i);
+					interrupted = true;
+				}
+			}
+		}
+
+		cycleCount += ticks;
+		cycles += ticks;
+
+#if cputrace
+#if sys
+		Sys.println(log);
+#else
+		trace(log);
+#end
+#end
 	}
 
 	inline function runOp(op:Int)
 	{
 		ticks = tickValues[op];
 
-		switch(op)
+		switch (op)
 		{
 			case 0x00:	// NOP
 			case 0x01:	// LD BC,nn
@@ -149,6 +221,7 @@ class CPU
 				zf = sf = hf = false;
 			case 0x10:	// STOP
 				// TODO
+				throw "NYI " + StringTools.hex(op, 2);
 			case 0x11:	// LD DE,nn
 				de = read16pc();
 			case 0x12:	// LD (DE),A
@@ -167,7 +240,8 @@ class CPU
 				a = ((a << 1) & 0xff) | carry;
 				zf = sf = hf = false;
 			case 0x18:	// JR n
-				// TODO: ???
+				var inc = signed(readpc());
+				pc += inc;
 			case 0x19:	// ADD HL,DE
 				hl = add16(hl, de);
 			case 0x1a:	// LD A,(DE)
@@ -186,7 +260,13 @@ class CPU
 				a = (a >> 1) | carry;
 				zf = sf = hf = false;
 			case 0x20:	// JR NZ,n
-				// TODO: ??
+				if (!zf)
+				{
+					var inc = signed(readpc());
+					pc += inc;
+					ticks += 4;
+				}
+				else ++pc;
 			case 0x21:	// LD HL,nn
 				hl = read16pc();
 			case 0x22:	// LDI (HL),A
@@ -200,9 +280,32 @@ class CPU
 			case 0x26:	// LD H,n
 				h = readpc();
 			case 0x27:	// DAA
-				// TODO
+				var tmp:Int = cf ? 0x60 : 0;
+
+				if (hf) tmp |= 0x06;
+				if (!sf)
+				{
+					if (a & 0xf > 0x9)
+						tmp |= 0x06;
+					if (a > 0x99)
+						tmp |= 0x60;
+					a += tmp;
+					cf = tmp > 0x5f;
+				} else a -= tmp;
+
+				a &= 0xff;
+
+				zf = a == 0;
+				hf = false;
+
 			case 0x28:	// JR Z,n
-				// TODO
+				if (zf)
+				{
+					var inc = signed(readpc());
+					pc += inc;
+					ticks += 4;
+				}
+				else ++pc;
 			case 0x29:	// ADD HL,HL
 				hl = add16(hl, hl);
 			case 0x2a:	// LDI A,(HL)
@@ -219,7 +322,13 @@ class CPU
 				a ^= 0xff;
 				sf = hf = true;
 			case 0x30:	// JR NC,n
-				// TODO
+				if (!cf)
+				{
+					var inc = signed(readpc());
+					pc += inc;
+					ticks += 4;
+				}
+				else ++pc;
 			case 0x31:	// LD SP,nn
 				sp = read16pc();
 			case 0x32:	// LDD (HL),A
@@ -244,7 +353,13 @@ class CPU
 				cf = true;
 				sf = hf = false;
 			case 0x38:	// JR C,n
-				// TODO
+				if (cf)
+				{
+					var inc = signed(readpc());
+					pc += inc;
+					ticks += 4;
+				}
+				else ++pc;
 			case 0x39:	// ADD HL,SP
 				hl = add16(hl, sp);
 			case 0x3a:	// LDD A,(HL)
@@ -364,6 +479,7 @@ class CPU
 				write(hl, l);
 			case 0x76:	// HALT
 				// TODO
+				//throw "NYI " + StringTools.hex(op, 2);
 			case 0x77:	// LD (HL),A
 				write(hl, a);
 			case 0x78:	// LD A,B
@@ -632,7 +748,7 @@ class CPU
 			case 0xd5:	// PUSH DE
 				pushStack(de);
 			case 0xd6:	// SUB A,n
-				sub(a, readpc());
+				a = sub(a, readpc());
 			case 0xd7:	// RST 0x10
 				rst(0x10);
 			case 0xd8:	// RET FC
@@ -643,7 +759,7 @@ class CPU
 				}
 			case 0xd9:	// RETI
 				pc = popStack();
-				// TODO: IRQ
+				ime = true;
 			case 0xda:	// JP FC,nn
 				if (cf)
 				{
@@ -698,13 +814,13 @@ class CPU
 			case 0xef: // RST 0x28
 				rst(0x28);
 			case 0xf0:	// LDH A,(n)
-				write(0xff00 | a, readpc());
+				a = read(0xff00 | readpc());
 			case 0xf1:	// POP AF
 				af = popStack();
 			case 0xf2:	// LD A,(0xFF00+C)
 				a = read(0xFF00 | c);
 			case 0xf3:	// DI
-				// TODO
+				ime = false;
 			// 0xf4 is illegal
 			case 0xf5:	// PUSH AF
 				pushStack(af);
@@ -713,13 +829,18 @@ class CPU
 			case 0xf7:	// RST 0x30
 				rst(0x30);
 			case 0xf8:	// LDHL SP,n
-				// TODO
+				var tmp = signed(readpc());
+				hl = (sp + tmp) & 0xffff;
+				zf = sf = false;
+				tmp = sp ^ tmp ^ hl;
+				cf = tmp & 0x100 == 0x100;
+				hf = tmp & 0x10 == 0x10;
 			case 0xf9:	// LD SP,HL
 				sp = hl;
 			case 0xfa:	// LD A,(nn)
 				a = read(read16pc());
 			case 0xfb:	// EI
-				// TODO
+				ime = true;
 			// 0xfc is illegal
 			// 0xfd is illegal
 			case 0xfe:	// CMP n
@@ -739,7 +860,7 @@ class CPU
 	{
 		ticks = tickValues2[op];
 
-		switch(op)
+		switch (op)
 		{
 			case 0x00:	// RLC B
 				b = rlc(b);
@@ -1263,7 +1384,9 @@ class CPU
 		hf = (op1 & 0xf) > (sum & 0xf);
 		cf = sum > 0xff;
 		sf = false;
-		return sum & 0xff;
+		sum &= 0xff;
+		zf = sum == 0;
+		return sum;
 	}
 
 	inline function add16(op1:Int, op2:Int)
@@ -1272,7 +1395,9 @@ class CPU
 		hf = (op1 & 0xfff) > (sum & 0xfff);
 		cf = sum > 0xffff;
 		sf = false;
-		return sum & 0xffff;
+		sum &= 0xffff;
+		zf = sum == 0;
+		return sum;
 	}
 
 	inline function adc(op:Int)
@@ -1286,14 +1411,16 @@ class CPU
 		sf = false;
 	}
 
+	//00 - 88 = 78
+	//hf should be false
 	inline function sub(op1:Int, op2:Int)
 	{
 		var sum = op1 - op2;
-		hf = (op1 & 0xf) < (op2 & 0xf);
 		cf = sum < 0;
+		hf = (op1 & 0xf) < (op2 & 0xf);
 		zf = sum == 0;
 		sf = true;
-		return sum;
+		return sum & 0xff;
 	}
 
 	inline function sbc(op:Int)
@@ -1313,7 +1440,7 @@ class CPU
 		zf = (val == 0);
 		hf = (val & 0xf) == 0;
 		sf = false;
-		return val;
+		return val & 0xff;
 	}
 
 	inline function dec(val:Int)
@@ -1322,7 +1449,7 @@ class CPU
 		zf = val == 0;
 		hf = val & 0xf == 0xf;
 		sf = true;
-		return val;
+		return val & 0xff;
 	}
 
 	inline function and(val:Int)
@@ -1375,7 +1502,7 @@ class CPU
 		val = (val << 1 & 0xff) | (cf ? 1 : 0);
 		zf = val == 0;
 		sf = hf = false;
-		return val;
+		return val & 0xff;
 	}
 
 	inline function rrc(val:Int)
@@ -1384,7 +1511,7 @@ class CPU
 		val = (val >> 1 & 0xff) | (cf ? 0x80 : 0);
 		zf = val == 0;
 		sf = hf = false;
-		return val;
+		return val & 0xff;
 	}
 
 	inline function rl(val:Int)
@@ -1394,7 +1521,7 @@ class CPU
 		cf = newCf;
 		hf = sf = false;
 		zf = val == 0;
-		return val;
+		return val & 0xff;
 	}
 
 	inline function rr(val:Int)
@@ -1404,7 +1531,7 @@ class CPU
 		cf = newCf;
 		hf = sf = false;
 		zf = val == 0;
-		return val;
+		return val & 0xff;
 	}
 
 	inline function sla(val:Int)
@@ -1422,7 +1549,7 @@ class CPU
 		val = (val & 0x80) | (val >> 1);
 		hf = sf = false;
 		zf = val == 0;
-		return val;
+		return val & 0xff;
 	}
 
 	inline function swap(val:Int)
@@ -1430,7 +1557,7 @@ class CPU
 		val = ((val & 0xf) << 4) | (val >> 4);
 		zf = val == 0;
 		cf = hf = sf = false;
-		return val;
+		return val & 0xff;
 	}
 
 	inline function srl(val:Int)
@@ -1439,7 +1566,7 @@ class CPU
 		val >>= 1;
 		hf = sf = false;
 		zf = val == 0;
-		return val;
+		return val & 0xff;
 	}
 
 	inline function bit(val:Int, n:Int)
@@ -1461,7 +1588,7 @@ class CPU
 
 	inline function readpc()
 	{
-		return read(pc++);
+		return read((pc++) & 0xffff);
 	}
 
 	inline function read16pc()
@@ -1473,16 +1600,27 @@ class CPU
 
 	inline function read(addr:Int)
 	{
+#if cputrace
+		//log += " R" + StringTools.hex(addr, 4);
+		var val = cart.read(addr) & 0xff;
+		//log += "=" + StringTools.hex(val, 2);
+		return val;
+#else
 		return cart.read(addr) & 0xff;
+#end
 	}
 
 	inline function read16(addr:Int)
 	{
-		return (read(addr+1) << 8) | read(addr);
+		return read(addr) | (read(addr+1) << 8);
 	}
 
 	inline function write(addr:Int, value:Int)
 	{
+#if cputrace
+		//log += " W" + StringTools.hex(addr, 4);
+		//log += "=" + StringTools.hex(value & 0xff, 2);
+#end
 		cart.write(addr, value & 0xff);
 	}
 
@@ -1502,6 +1640,21 @@ class CPU
 	inline function popStack()
 	{
 		return (read(sp++) | (read(sp++) << 8)) & 0xffff;
+	}
+
+	inline function signed(n:Int)
+	{
+		return n > 0x80 ? (n - 0x100) : n;
+	}
+
+	inline function interrupt(i:Int)
+	{
+		interruptsRequested[i] = false;
+		ime = false;
+		//trace("INTERRUPT", cycleCount, i);
+		pushStack(pc);
+		pc = Interrupt.vectors[i];
+		ticks += 20;
 	}
 
 	static var tickValues:Vector<Int> = Vector.fromArrayCopy([

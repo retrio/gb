@@ -1,15 +1,52 @@
-class Main
+import strafe.ui.openfl.KeyboardController;
+import strafe.FileWrapper;
+import strafe.ui.openfl.GBPlugin;
+import strafe.ui.openfl.Shell;
+
+
+class Main extends strafe.ui.openfl.Shell
 {
+	function new()
+	{
+		super();
+
+#if (cpp && profile)
+		cpp.vm.Profiler.start();
+	}
+
+	var _profiling:Bool = true;
+	var _f = 0;
+	override public function update(e:Dynamic)
+	{
+		super.update(e);
+
+		if (_profiling)
+		{
+			_f++;
+			trace(_f);
+			if (_f >= 60*15)
+			{
+				trace("DONE");
+				cpp.vm.Profiler.stop();
+				_profiling = false;
+			}
+		}
+#end
+	}
+
 	static function main()
 	{
-		var file = strafe.FileWrapper.read("assets/roms/ffl.gb");
-		var rom = new strafe.emu.gb.Cart(file);
-		trace(rom.name);
+		var m = new Main();
+	}
 
-		var cpu = new strafe.emu.gb.CPU();
-		cpu.init(rom);
+	override function onStage(e:Dynamic)
+	{
+		super.onStage(e);
 
-		for (i in 0 ... 1000)
-			cpu.runCycle();
+		var plugin = new GBPlugin();
+		var controller = new strafe.ui.openfl.KeyboardController();
+		plugin.addController(controller);
+
+		loadPlugin(plugin);
 	}
 }
