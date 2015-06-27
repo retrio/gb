@@ -479,7 +479,7 @@ class CPU
 				write(hl, l);
 			case 0x76:	// HALT
 				// TODO
-				//throw "NYI " + StringTools.hex(op, 2);
+				throw "NYI " + StringTools.hex(op, 2);
 			case 0x77:	// LD (HL),A
 				write(hl, a);
 			case 0x78:	// LD A,B
@@ -752,7 +752,7 @@ class CPU
 			case 0xd7:	// RST 0x10
 				rst(0x10);
 			case 0xd8:	// RET FC
-				if (!cf)
+				if (cf)
 				{
 					pc = popStack();
 					ticks += 12;
