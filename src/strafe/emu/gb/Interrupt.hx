@@ -13,6 +13,6 @@ abstract Interrupt(Int) from Int to Int
 	var Joypad = 4;
 
 	public static var vectors:Vector<Int> = Vector.fromArrayCopy([
-		0x40, 0x48, 0x50, 0x58, 0
+		0x40, 0x48, 0x50, 0x58, 0x60
 	]);
 }

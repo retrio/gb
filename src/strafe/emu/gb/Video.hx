@@ -25,10 +25,12 @@ class Video
 	public var vram:ByteString;		// video RAM
 
 	public var frameCount:Int = 0;
-	public var scanline:Int = 0;
-	public var cycles:Int = 0;
+	public var scanline:Int = 153;
+	public var cycles:Int = 396;
 	public var stolenCycles:Int = 0;
 	public var finished:Bool = false;
+
+	public var lcdDisplay:Bool = true;
 
 	var bgDisplay:Bool = false;
 	var objDisplay:Bool = false;
@@ -37,13 +39,12 @@ class Video
 	var tileDataAddr:Int = 0x8800;
 	var windowDisplay:Bool = false;
 	var windowTileAddr:Int = 0x9800;
-	var lcdDisplay:Bool = true;
 
-	var hblankInterrupt:Bool = false;
-	var vblankInterrupt:Bool = false;
-	var oamInterrupt:Bool = false;
-	var coincidenceInterrupt:Bool = false;
-	var coincidenceScanline:Int = 0;
+	public var hblankInterrupt:Bool = false;
+	public var vblankInterrupt:Bool = false;
+	public var oamInterrupt:Bool = false;
+	public var coincidenceInterrupt:Bool = false;
+	public var coincidenceScanline:Int = 0;
 
 	var mode:VideoMode = Oam;
 
@@ -109,7 +110,7 @@ class Video
 			case 0xff43: return scrollX;
 
 			// scanline
-			case 0xff44: return scanline;
+			case 0xff44: return scanline % 153;
 			case 0xff45: return coincidenceScanline;
 
 			// DMA
@@ -161,6 +162,7 @@ class Video
 			case 0xff43: scrollX = value;
 
 			// scanline
+			case 0xff44: scanline = 0;
 			case 0xff45: coincidenceScanline = value;
 
 			// DMA
@@ -185,10 +187,7 @@ class Video
 			case 0xff69: // TODO
 			case 0xff6a: // TODO
 
-			default:
-#if !test
-				throw "Bad write: " + StringTools.hex(addr, 4);
-#end
+			default: {}
 		}
 	}
 
@@ -218,12 +217,14 @@ class Video
 			while (cpu.cycles > 0)
 			{
 				--cpu.cycles;
+				stolenCycles += cpu.cycles;
 				advance();
 				runCycle();
 			}
 		}
 		else
 		{
+			stolenCycles = cpu.cycles;
 			cpu.cycles = 0;
 		}
 	}
@@ -239,6 +240,10 @@ class Video
 				++frameCount;
 				finished = true;
 			}
+			if (lcdDisplay && coincidenceInterrupt && scanline == coincidenceScanline)
+			{
+				cpu.irq(Interrupt.LcdStat);
+			}
 		}
 	}
 
@@ -246,30 +251,28 @@ class Video
 	{
 		if (scanline < 144)
 		{
-			if (cycles < 80)
+			switch (cycles)
 			{
-				mode = Oam;
-			}
-			else if (cycles < 252)
-			{
-				mode = Vram;
-			}
-			else
-			{
-				if (mode == Vram)
-				{
+				case 0:
+					mode = Oam;
+					if (oamInterrupt) cpu.irq(Interrupt.LcdStat);
+
+				case 80:
+					mode = Vram;
+
+				case 252:
 					renderScanline();
+					if (hblankInterrupt) cpu.irq(Interrupt.LcdStat);
 					mode = Hblank;
-				}
+
+				default: {}
 			}
 		}
-		else
+		else if (scanline == 144 && cycles == 0)
 		{
-			if (mode == Hblank)
-			{
-				cpu.irq(Interrupt.Vblank);
-				mode = Vblank;
-			}
+			cpu.irq(Interrupt.Vblank);
+			if (vblankInterrupt) cpu.irq(Interrupt.LcdStat);
+			mode = Vblank;
 		}
 	}
 

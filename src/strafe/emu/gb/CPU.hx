@@ -6,11 +6,24 @@ import haxe.ds.Vector;
 @:build(strafe.macro.Optimizer.build())
 class CPU
 {
+	// prevent emulation from hanging by yielding at least this frequently
+	static inline var MAX_CYCLES_PER_FRAME = 1000000;
+
 	public var cart:Cart;
 	public var video:Video;
 
 	public var cycleCount:Int = 0;
 	public var cycles:Int = 0;
+
+	// timers
+	public var divTicks:Int = 0;
+	public var timerValue:Int = 0;
+	public var timerTicks:Int = 0;
+	public var tacClocks:Int = 0x400;
+	public var timerMod:Int = 0;
+	public var timerEnabled:Bool = false;
+
+	public var halted:Bool = false;
 
 	var ticks:Int = 0;
 
@@ -78,7 +91,7 @@ class CPU
 		return byte;
 	}
 
-	var ime:Bool = true;					// interrupt master enable
+	var ime:Bool = false;					// interrupt master enable
 	var interruptsRequested:Vector<Bool>;
 	var interruptsEnabled:Vector<Bool>;
 
@@ -121,14 +134,38 @@ class CPU
 	public function runFrame()
 	{
 		video.stolenCycles = 0;
+		var total:Int = 0;
 		while (!video.finished)
 		{
-			runCycle();
+			if (++total + video.stolenCycles > MAX_CYCLES_PER_FRAME)
+				break;
+
+			if (halted)
+			{
+				predictHalt();
+			}
+			else
+			{
+				runCycle();
+			}
 
 			var projScanline = video.scanline + ((video.cycles + cycles) / 456);
-			if (projScanline > video.scanline)
+			if (halted || projScanline > video.scanline)
 			{
 				video.catchUp();
+			}
+
+			if (ime)
+			{
+				var interrupted = false;
+				@unroll for (i in 0 ... 5)
+				{
+					if (!interrupted && interruptsEnabled[i] && interruptsRequested[i])
+					{
+						interrupt(i);
+						interrupted = true;
+					}
+				}
 			}
 		}
 		video.finished = false;
@@ -138,7 +175,7 @@ class CPU
 	{
 #if cputrace
 		log = StringTools.hex(cycleCount, 8).toLowerCase();
-		log += " L" + StringTools.hex(video.scanline, 2).toLowerCase();
+		log += " L" + StringTools.hex(video.scanline % 153, 2).toLowerCase();
 		log += " PC:" + StringTools.hex(pc, 4).toLowerCase();
 #end
 		var op = readpc();
@@ -153,21 +190,7 @@ class CPU
 
 		runOp(op);
 
-		if (ime)
-		{
-			var interrupted = false;
-			@unroll for (i in 0 ... 5)
-			{
-				if (!interrupted && interruptsEnabled[i] && interruptsRequested[i])
-				{
-					interrupt(i);
-					interrupted = true;
-				}
-			}
-		}
-
-		cycleCount += ticks;
-		cycles += ticks;
+		tick(ticks);
 
 #if cputrace
 #if sys
@@ -478,8 +501,8 @@ class CPU
 			case 0x75:	// LD (HL),L
 				write(hl, l);
 			case 0x76:	// HALT
-				// TODO
-				throw "NYI " + StringTools.hex(op, 2);
+				halted = true;
+				predictHalt();
 			case 0x77:	// LD (HL),A
 				write(hl, a);
 			case 0x78:	// LD A,B
@@ -801,7 +824,13 @@ class CPU
 			case 0xe7:	// RST 0x20
 				rst(0x20);
 			case 0xe8:	// ADD SP,n
-				sp = add(sp, readpc());
+				var val = signed(readpc());
+				var sum = (sp + val) & 0xffff;
+				val = sp ^ val ^ sum;
+				sp = sum;
+				cf = Util.getbit(val, 8);
+				hf = Util.getbit(val, 4);
+				zf = sf = false;
 			case 0xe9:	// JP, (HL)
 				pc = hl;
 			case 0xea:	// LD n,A
@@ -1006,7 +1035,7 @@ class CPU
 			case 0x46: // BIT 0,(HL)
 				bit(read(hl), 0);
 			case 0x47: // BIT 0,A
-				bit(a, 1);
+				bit(a, 0);
 			case 0x48: // BIT 1,B
 				bit(b, 1);
 			case 0x49: // BIT 1,C
@@ -1134,7 +1163,7 @@ class CPU
 			case 0x86: // RES 0,(HL)
 				write(hl, res(read(hl), 0));
 			case 0x87: // RES 0,A
-				a = res(a, 1);
+				a = res(a, 0);
 			case 0x88: // RES 1,B
 				b = res(b, 1);
 			case 0x89: // RES 1,C
@@ -1262,7 +1291,7 @@ class CPU
 			case 0xc6: // SET 0,(HL)
 				write(hl, set(read(hl), 0));
 			case 0xc7: // SET 0,A
-				a = set(a, 1);
+				a = set(a, 0);
 			case 0xc8: // SET 1,B
 				b = set(b, 1);
 			case 0xc9: // SET 1,C
@@ -1396,7 +1425,7 @@ class CPU
 		cf = sum > 0xffff;
 		sf = false;
 		sum &= 0xffff;
-		zf = sum == 0;
+		//zf = sum == 0;
 		return sum;
 	}
 
@@ -1644,17 +1673,96 @@ class CPU
 
 	inline function signed(n:Int)
 	{
-		return n > 0x80 ? (n - 0x100) : n;
+		return (n ^ 0x80) - 0x80;
 	}
 
 	inline function interrupt(i:Int)
 	{
 		interruptsRequested[i] = false;
 		ime = false;
-		//trace("INTERRUPT", cycleCount, i);
 		pushStack(pc);
 		pc = Interrupt.vectors[i];
-		ticks += 20;
+		tick(20);
+		halted = false;
+	}
+
+	inline function bestPrediction(oldPrediction:Int, newPrediction:Int):Int
+	{
+		return (oldPrediction == -1 || newPrediction < oldPrediction) ? newPrediction : oldPrediction;
+	}
+
+	inline function predictHalt()
+	{
+		// figure out which interrupt will break out of halt first,
+		// then wait for it
+		var awake:Int = -1;
+
+		if (video.lcdDisplay)
+		{
+			// end of frame, wake up to yield control
+			awake = 456 * (154 - video.scanline) - video.cycles;
+
+			if (interruptsEnabled[Interrupt.Vblank])
+			{
+				awake = 456 * (144 - video.scanline) - video.cycles;
+			}
+			if (interruptsEnabled[Interrupt.LcdStat])
+			{
+				if (video.hblankInterrupt)
+				{
+					var next = 252 - video.cycles;
+					if (next < 0) next += 456;
+					awake = bestPrediction(awake, next);
+				}
+				if (video.oamInterrupt)
+				{
+					awake = bestPrediction(awake, 456 - video.cycles);
+				}
+				if (video.coincidenceInterrupt)
+				{
+					var next = (video.coincidenceScanline - video.scanline) * 456 - video.cycles;
+					if (next < 0) next += (154 * 456);
+					awake = bestPrediction(awake, next);
+				}
+			}
+		}
+		if (timerEnabled)
+		{
+			var next = (0x100 - timerValue) * tacClocks - timerTicks;
+			awake = bestPrediction(awake, next);
+		}
+		// TODO: serial
+
+		if (awake > 0)
+		{
+			cycleCount += (awake - cycles);
+			cycles = awake;
+		}
+	}
+
+	inline function tick(ticks:Int)
+	{
+		cycleCount += ticks;
+		cycles += ticks;
+		divTicks += ticks;
+		if (timerEnabled)
+		{
+			tickTimer(ticks);
+		}
+	}
+
+	inline function tickTimer(ticks:Int)
+	{
+		timerTicks += ticks;
+		while (timerTicks > tacClocks)
+		{
+			timerTicks -= tacClocks;
+			if (++timerValue == 0x100)
+			{
+				timerValue = timerMod;
+				irq(Interrupt.Timer);
+			}
+		}
 	}
 
 	static var tickValues:Vector<Int> = Vector.fromArrayCopy([

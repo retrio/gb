@@ -178,8 +178,7 @@ class Cart
 				}
 				else if (addr < 0xff40)
 				{
-					// TODO: non-video IO
-					return 0;
+					return ioRead(addr);
 				}
 				else if (addr < 0xff80)
 				{
@@ -193,8 +192,9 @@ class Cart
 				{
 					return cpu.interruptsEnabledFlag;
 				}
+
 			default:
-				throw "Bad read: " + StringTools.hex(addr, 4);
+				return 0xff;
 		}
 	}
 
@@ -228,11 +228,11 @@ class Cart
 				}
 				else if (addr < 0xff00)
 				{
-					throw "Bad write: " + StringTools.hex(addr, 4);
+					// writing here does nothing
 				}
 				else if (addr < 0xff40)
 				{
-					// TODO: non-video IO
+					ioWrite(addr, value);
 				}
 				else if (addr < 0xff80)
 				{
@@ -247,8 +247,50 @@ class Cart
 					cpu.interruptsEnabledFlag = value;
 				}
 
-			default:
-				throw "Bad write: " + StringTools.hex(addr, 4);
+			default: {}
+		}
+	}
+
+	inline function ioRead(addr:Int):Int
+	{
+		switch (addr)
+		{
+			case 0xff04:
+				var result = (cpu.divTicks >> 8) & 0xff;
+				cpu.divTicks &= 0xff;
+				return result;
+			case 0xff05: return cpu.timerValue;
+			case 0xff06: return cpu.timerMod;
+			case 0xff07:
+				return (switch (cpu.tacClocks)
+				{
+					case 0x10: 1;
+					case 0x40: 2;
+					case 0x100: 3;
+					default: 0;
+				}) | (cpu.timerEnabled ? 0x4 : 0);
+			default: return 0;
+		}
+	}
+
+	inline function ioWrite(addr:Int, value:Int):Void
+	{
+		//trace(StringTools.hex(addr), value);
+		switch(addr)
+		{
+			case 0xff04: cpu.divTicks = 0;
+			case 0xff05: cpu.timerValue = value;
+			case 0xff06: cpu.timerMod = value;
+			case 0xff07:
+				cpu.tacClocks = switch (value & 0x3)
+				{
+					case 1: 0x10;
+					case 2: 0x40;
+					case 3: 0x100;
+					default: 0x400;
+				}
+				cpu.timerEnabled = Util.getbit(value, 2);
+			default: {}
 		}
 	}
 
