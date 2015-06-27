@@ -1,0 +1,24 @@
+<tests dir="assets/roms/test/">
+	<!-- CPU tests -->
+	<test rom="01-special.gb" hash="001bb05c5c2ac694d58ee50224d367df19bac148"/>
+	<test rom="02-interrupts.gb"/>
+	<test rom="03-op sp,hl.gb"/>
+	<test rom="04-op r,imm.gb" hash="eadbf1317a5e9e79bbd5c784c37679188a5374fd"/>
+	<test rom="05-op rp.gb"/>
+	<test rom="06-ld r,r.gb" hash="581fb6c1ce6285a77f23701aa6258a710fab269b"/>
+	<test rom="07-jr,jp,call,ret,rst.gb" hash="5c6add4084004d8e606647d5ef8bf1b473cf1c54"/>
+	<test rom="08-misc instrs.gb" hash="389c9e9b5cdda525343f1baf74824664587f96f3"/>
+	<test rom="09-op r,r.gb" hash="fabd06ed5011c6cc8512ae22c717c2c94642ab62"/>
+	<test rom="10-bit ops.gb"/>
+	<test rom="11-op a,(hl).gb" hash="a592bd59e256ebd67a0251cdc465aeca5abd86ef"/>
+
+	<test rom="instr_timing.gb"/>
+
+	<!-- mem timing -->
+	<test rom="01-read_timing.gb"/>
+	<test rom="02-write_timing.gb"/>
+	<test rom="03-modify_timing.gb"/>
+
+    <!-- interrupt timing -->
+    <test rom="interrupt_time.gb"/>
+</tests>
