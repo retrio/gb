@@ -20,7 +20,7 @@ class MBC2 extends MBC
 				if (addr & 0x100 == 0)
 					ramEnable = (val & 0xf) == 0xa;
 			case 0x2000, 0x3000:
-				if (addr & 0x100 == 1)
+				if (addr & 0x100 == 0x100)
 					romBank = val & 0xf;
 		}
 	}

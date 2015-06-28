@@ -71,6 +71,8 @@ class Video
 
 		tileBuffer = new ByteString(0x8000);
 		tileBuffer.fillWith(0);
+
+		screenBuffer.fillWith(0);
 	}
 
 	public function init(cpu:CPU, cart:Cart)

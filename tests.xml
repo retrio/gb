@@ -1,7 +1,7 @@
 <tests dir="assets/roms/test/">
 	<!-- CPU tests -->
 	<test rom="01-special.gb" hash="001bb05c5c2ac694d58ee50224d367df19bac148"/>
-	<test rom="02-interrupts.gb"/>
+	<test rom="02-interrupts.gb" hash="b394f74c99821d53f07e8623aa2d1667d3c80bbf"/>
 	<test rom="03-op sp,hl.gb" hash="5eb451be7775791340d6e82195716054d3504800"/>
 	<test rom="04-op r,imm.gb" hash="eadbf1317a5e9e79bbd5c784c37679188a5374fd"/>
 	<test rom="05-op rp.gb" hash="bc3bab0073bba6ec49be7c30072b68d10bb1bef3"/>
@@ -12,7 +12,7 @@
 	<test rom="10-bit ops.gb" hash="ec7b07b7f7b7b660d04e7be46f81b591a58dce93"/>
 	<test rom="11-op a,(hl).gb" hash="a592bd59e256ebd67a0251cdc465aeca5abd86ef"/>
 
-	<test rom="instr_timing.gb"/>
+	<test rom="instr_timing.gb" hash="75950d8149e1dfd2ffe5391907fa41f3212de3a0"/>
 
 	<!-- mem timing -->
 	<test rom="01-read_timing.gb"/>

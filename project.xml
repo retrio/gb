@@ -4,6 +4,7 @@
 	<app main="Main" path="bin" file="strafe"/>
 	<app path="bin-profile" if="profile"/>
 	<app path="bin-cputrace" if="cputrace"/>
+	<app path="bin-debug" if="debug"/>
 	<!--haxeflag name="--no-inline" if="advanced-telemetry"/-->
 
 	<window fps="60" background="0x000000"/>
@@ -12,7 +13,7 @@
 	<window orientation="landscape" vsync="true"/>
 	<window resizable="true"/>
 
-    <haxeflag name="-swf-version" value="11.3" if="flash"/>
+	<haxeflag name="-swf-version" value="11.3" if="flash"/>
 
 	<source path="src"/>
 
@@ -20,6 +21,4 @@
 	<haxelib name="systools" if="native"/>
 	<haxelib name="openfl"/>
 	<haxelib name="strafe-core" path="../"/>
-
-    <assets path="assets"/>
 </project>

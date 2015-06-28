@@ -33,6 +33,11 @@ class Cart
 	public var ramBanks:Vector<ByteString>;
 	public var wramBanks:Vector<ByteString>;
 
+	public var rtc:Int = 0;			// RTC register selected or 0 if none
+
+	var rtcTime:Date = Date.now();	// latched RTC time
+	var rtcLatch:Bool = false;
+
 	public function new(file:FileWrapper)
 	{
 		// initial memory allocation
@@ -70,7 +75,9 @@ class Cart
 				mbc = new MBC1();
 			case 0x05, 0x06:
 				mbc = new MBC2();
-			//case
+			case 0xf, 0x10, 0x11, 0x12, 0x13:
+				mbc = new MBC3();
+			// TODO: MBC5
 			default:
 				throw "Cart type " + StringTools.hex(cartType) + " not supported";
 		}
@@ -156,7 +163,8 @@ class Cart
 			case 0x8000, 0x9000:
 				return video.vramRead(addr);
 			case 0xa000, 0xb000:
-				return ram[addr-0xa000];
+				if (rtc > 0) return rtcRead();
+				else return ram[addr-0xa000];
 			case 0xc000:
 				return wram1[addr-0xc000];
 			case 0xd000:
@@ -174,7 +182,8 @@ class Cart
 				}
 				else if (addr < 0xff00)
 				{
-					throw "Bad read: " + StringTools.hex(addr, 4);
+					// unused memory region
+					return 0xff;
 				}
 				else if (addr < 0xff40)
 				{
@@ -210,7 +219,8 @@ class Cart
 			case 0x8000, 0x9000:
 				video.vramWrite(addr, value);
 			case 0xa000, 0xb000:
-				ram.set(addr-0xa000, value);
+				if (rtc > 0) rtcWrite(value);
+				else ram.set(addr-0xa000, value);
 			case 0xc000:
 				wram1.set(addr-0xc000, value);
 			case 0xd000:
@@ -269,6 +279,7 @@ class Cart
 					case 0x100: 3;
 					default: 0;
 				}) | (cpu.timerEnabled ? 0x4 : 0);
+			case 0xff0f: return 0xe0 | cpu.interruptsRequestedFlag;
 			default: return 0;
 		}
 	}
@@ -290,7 +301,40 @@ class Cart
 					default: 0x400;
 				}
 				cpu.timerEnabled = Util.getbit(value, 2);
+			case 0xff0f: cpu.interruptsRequestedFlag = value;
 			default: {}
+		}
+	}
+
+	inline function rtcRead():Int
+	{
+		switch (rtc)
+		{
+			case 0x8: return rtcTime.getSeconds();
+			case 0x9: return rtcTime.getMinutes();
+			case 0xa: return rtcTime.getHours();
+			case 0xb:
+				return Std.int((Date.now().getTime() - rtcTime.getTime()) / 86400) & 0xff;
+			case 0xc:
+				var dayCounter = Std.int((Date.now().getTime() - rtcTime.getTime()) / 86400);
+				return ((dayCounter >> 8) & 1) | (dayCounter > 511 ? 0x80 : 0);
+			default: return 0xff;
+		}
+	}
+
+	inline function rtcWrite(value:Int):Void
+	{
+		if (rtcLatch)
+		{
+			if (value == 1)
+			{
+				rtcTime = Date.now();
+			}
+			else rtcLatch = false;
+		}
+		else
+		{
+			rtcLatch = value == 0;
 		}
 	}
 

@@ -7,7 +7,7 @@ import haxe.ds.Vector;
 class CPU
 {
 	// prevent emulation from hanging by yielding at least this frequently
-	static inline var MAX_CYCLES_PER_FRAME = 1000000;
+	static inline var MAX_CYCLES_PER_FRAME = 500000;
 
 	public var cart:Cart;
 	public var video:Video;
@@ -26,6 +26,7 @@ class CPU
 	public var halted:Bool = false;
 
 	var ticks:Int = 0;
+	var timerPostpone:Bool = true;
 
 #if cputrace
 	var log:String;
@@ -91,7 +92,7 @@ class CPU
 		return byte;
 	}
 
-	var ime:Bool = false;					// interrupt master enable
+	var ime:Bool = true;					// interrupt master enable
 	var interruptsRequested:Vector<Bool>;
 	var interruptsEnabled:Vector<Bool>;
 
@@ -107,6 +108,21 @@ class CPU
 	inline function set_interruptsEnabledFlag(v:Int)
 	{
 		@unroll for (i in 0 ... 5) interruptsEnabled[i] = Util.getbit(v, i);
+		return v;
+	}
+
+	public var interruptsRequestedFlag(get, set):Int;
+	inline function get_interruptsRequestedFlag()
+	{
+		return (interruptsRequested[0] ? 0x1 : 0) |
+			(interruptsRequested[1] ? 0x2 : 0) |
+			(interruptsRequested[2] ? 0x4 : 0) |
+			(interruptsRequested[3] ? 0x8 : 0) |
+			(interruptsRequested[4] ? 0x10 : 0);
+	}
+	inline function set_interruptsRequestedFlag(v:Int)
+	{
+		@unroll for (i in 0 ... 5) interruptsRequested[i] = Util.getbit(v, i);
 		return v;
 	}
 
@@ -134,7 +150,9 @@ class CPU
 	public function runFrame()
 	{
 		video.stolenCycles = 0;
+		video.finished = false;
 		var total:Int = 0;
+
 		while (!video.finished)
 		{
 			if (++total + video.stolenCycles > MAX_CYCLES_PER_FRAME)
@@ -168,7 +186,6 @@ class CPU
 				}
 			}
 		}
-		video.finished = false;
 	}
 
 	inline function runCycle()
@@ -763,6 +780,7 @@ class CPU
 				if (!cf)
 				{
 					call();
+					ticks += 12;
 				}
 				else
 				{
@@ -1735,8 +1753,8 @@ class CPU
 
 		if (awake > 0)
 		{
-			cycleCount += (awake - cycles);
-			cycles = awake;
+			if (awake > cycles) tick(awake - cycles);
+			halted = false;
 		}
 	}
 
@@ -1747,8 +1765,10 @@ class CPU
 		divTicks += ticks;
 		if (timerEnabled)
 		{
-			tickTimer(ticks);
+			if (timerPostpone) timerPostpone = false;
+			else tickTimer(ticks);
 		}
+		else timerPostpone = true;
 	}
 
 	inline function tickTimer(ticks:Int)
@@ -1768,21 +1788,21 @@ class CPU
 	static var tickValues:Vector<Int> = Vector.fromArrayCopy([
 	/*   0,  1,  2,  3,  4,  5,  6,  7,  8,  9,  A,  B,  C,  D,  E,  F*/
 		 4, 12,  8,  8,  4,  4,  8,  4, 20,  8,  8,  8,  4,  4,  8,  4,  //0
-		 4, 12,  8,  8,  4,  4,  8,  4, 12,  8,  8,  8,  4,  4,  8,  4,  //1
+		 0, 12,  8,  8,  4,  4,  8,  4, 12,  8,  8,  8,  4,  4,  8,  4,  //1
 		 8, 12,  8,  8,  4,  4,  8,  4,  8,  8,  8,  8,  4,  4,  8,  4,  //2
 		 8, 12,  8,  8, 12, 12, 12,  4,  8,  8,  8,  8,  4,  4,  8,  4,  //3
 		 4,  4,  4,  4,  4,  4,  8,  4,  4,  4,  4,  4,  4,  4,  8,  4,  //4
 		 4,  4,  4,  4,  4,  4,  8,  4,  4,  4,  4,  4,  4,  4,  8,  4,  //5
 		 4,  4,  4,  4,  4,  4,  8,  4,  4,  4,  4,  4,  4,  4,  8,  4,  //6
-		 8,  8,  8,  8,  8,  8,  4,  8,  4,  4,  4,  4,  4,  4,  8,  4,  //7
+		 8,  8,  8,  8,  8,  8,  0,  8,  4,  4,  4,  4,  4,  4,  8,  4,  //7
 		 4,  4,  4,  4,  4,  4,  8,  4,  4,  4,  4,  4,  4,  4,  8,  4,  //8
 		 4,  4,  4,  4,  4,  4,  8,  4,  4,  4,  4,  4,  4,  4,  8,  4,  //9
 		 4,  4,  4,  4,  4,  4,  8,  4,  4,  4,  4,  4,  4,  4,  8,  4,  //A
 		 4,  4,  4,  4,  4,  4,  8,  4,  4,  4,  4,  4,  4,  4,  8,  4,  //B
 		 8, 12, 12, 16, 12, 16,  8, 16,  8, 16, 12,  0, 12, 24,  8, 16,  //C
-		 8, 12, 12,  4, 12, 16,  8, 16,  8, 16, 12,  4, 12,  4,  8, 16,  //D
-		12, 12,  8,  4,  4, 16,  8, 16, 16,  4, 16,  4,  4,  4,  8, 16,  //E
-		12, 12,  8,  4,  4, 16,  8, 16, 12,  8, 16,  4,  0,  4,  8, 16   //F
+		 8, 12, 12,  0, 12, 16,  8, 16,  8, 16, 12,  0, 12,  0,  8, 16,  //D
+		12, 12,  8,  0,  0, 16,  8, 16, 16,  4, 16,  0,  0,  0,  8, 16,  //E
+		12, 12,  8,  4,  0, 16,  8, 16, 12,  8, 16,  4,  0,  0,  8, 16   //F
 	]);
 	static var tickValues2:Vector<Int> = Vector.fromArrayCopy([
 	/*  0, 1, 2, 3, 4, 5,  6, 7, 8, 9, A, B, C, D,  E, F*/

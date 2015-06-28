@@ -92,9 +92,12 @@ class GBPlugin extends EmulatorPlugin
 	override public function frame()
 	{
 		if (!initialized) return;
+
 		if (running)
 		{
 			gb.frame();
+
+			if (!gb.video.finished) return;
 
 			if (frameSkip > 0)
 			{
@@ -108,11 +111,11 @@ class GBPlugin extends EmulatorPlugin
 			{
 				Memory.setI32((i-loopStart)*4, Palette.getColor(bm.get(i)));
 			}
-		}
 
-		pixels.position = 0;
-		bmpData.setPixels(r, pixels);
-		canvas.draw(bmpData, m);
+			pixels.position = 0;
+			bmpData.setPixels(r, pixels);
+			canvas.draw(bmpData, m);
+		}
 	}
 
 	function initScreen(width:Int, height:Int)
