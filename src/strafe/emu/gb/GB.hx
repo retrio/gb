@@ -21,7 +21,7 @@ class GB implements IEmulator implements IState
 	public var cpu:CPU;
 	public var cart:Cart;
 	public var video:Video;
-	public var controllers:Vector<GBController> = new Vector(1);
+	public var controllers:Vector<GBController> = new Vector(2);
 
 	public function new() {}
 
@@ -33,7 +33,7 @@ class GB implements IEmulator implements IState
 
 		cpu.init(cart, video);
 		video.init(cpu, cart);
-		cart.init(video);
+		cart.init(video, controllers);
 
 		buffer = video.screenBuffer;
 	}
@@ -67,8 +67,8 @@ class GB implements IEmulator implements IState
 			if (controllers[port] != null) return null;
 		}
 
-		//controllers[port] = new GBController(controller);
-		//controller.init(this);
+		controllers[port] = new GBController(controller);
+		controller.init(this);
 
 		return port;
 	}

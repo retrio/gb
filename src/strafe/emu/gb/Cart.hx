@@ -38,6 +38,10 @@ class Cart
 	var rtcTime:Date = Date.now();	// latched RTC time
 	var rtcLatch:Bool = false;
 
+	var joypadButtons:Bool = false;
+
+	var controllers:Vector<GBController>;
+
 	public function new(file:FileWrapper)
 	{
 		// initial memory allocation
@@ -142,9 +146,10 @@ class Cart
 		globalChecksum = (rom1[0x14e] << 8) | rom1[0x14f];
 	}
 
-	public function init(video:Video)
+	public function init(video:Video, controllers:Vector<GBController>)
 	{
 		this.video = video;
+		this.controllers = controllers;
 
 		for (key in _regs.keys())
 		{
@@ -178,7 +183,7 @@ class Cart
 				}
 				else if (addr < 0xfea0)
 				{
-					return video.oam[addr - 0xfe00];
+					return video.oamRead(addr);
 				}
 				else if (addr < 0xff00)
 				{
@@ -234,7 +239,7 @@ class Cart
 				}
 				else if (addr < 0xfea0)
 				{
-					video.oam.set(addr - 0xfe00, value);
+					video.oamWrite(addr, value);
 				}
 				else if (addr < 0xff00)
 				{
@@ -265,6 +270,9 @@ class Cart
 	{
 		switch (addr)
 		{
+			case 0xff00:
+				var controller = controllers[0];
+				return controller == null ? 0 : controller.buttons();
 			case 0xff04:
 				var result = (cpu.divTicks >> 8) & 0xff;
 				cpu.divTicks &= 0xff;
@@ -289,6 +297,13 @@ class Cart
 		//trace(StringTools.hex(addr), value);
 		switch(addr)
 		{
+			case 0xff00:
+				var controller = controllers[0];
+				if (controller != null)
+				{
+					controller.directionsEnabled = !Util.getbit(value, 4);
+					controller.buttonsEnabled = !Util.getbit(value, 5);
+				}
 			case 0xff04: cpu.divTicks = 0;
 			case 0xff05: cpu.timerValue = value;
 			case 0xff06: cpu.timerMod = value;
@@ -302,6 +317,7 @@ class Cart
 				}
 				cpu.timerEnabled = Util.getbit(value, 2);
 			case 0xff0f: cpu.interruptsRequestedFlag = value;
+
 			default: {}
 		}
 	}

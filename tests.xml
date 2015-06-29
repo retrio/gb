@@ -1,5 +1,7 @@
 <tests dir="assets/roms/test/">
 	<!-- CPU tests -->
+	<test rom="cpu_instrs.gb" hash="ec7a2ea1197dfd778481a685e09ee50c45ced09f"/>
+
 	<test rom="01-special.gb" hash="001bb05c5c2ac694d58ee50224d367df19bac148"/>
 	<test rom="02-interrupts.gb" hash="b394f74c99821d53f07e8623aa2d1667d3c80bbf"/>
 	<test rom="03-op sp,hl.gb" hash="5eb451be7775791340d6e82195716054d3504800"/>
@@ -13,12 +15,25 @@
 	<test rom="11-op a,(hl).gb" hash="a592bd59e256ebd67a0251cdc465aeca5abd86ef"/>
 
 	<test rom="instr_timing.gb" hash="75950d8149e1dfd2ffe5391907fa41f3212de3a0"/>
+	<test rom="halt_bug.gb"/>
 
 	<!-- mem timing -->
 	<test rom="01-read_timing.gb"/>
 	<test rom="02-write_timing.gb"/>
 	<test rom="03-modify_timing.gb"/>
 
-    <!-- interrupt timing -->
-    <test rom="interrupt_time.gb"/>
+	<!-- interrupt timing -->
+	<test rom="interrupt_time.gb"/>
+
+	<!-- oam bug -->
+	<test rom="oam_bug.gb"/>
+
+	<test rom="1-lcd_sync.gb"/>
+	<test rom="2-causes.gb"/>
+	<test rom="3-non_causes.gb" hash="b60c9a55b59efe14c12e97f2cee78927eb72f79f"/>
+	<test rom="4-scanline_timing.gb"/>
+	<test rom="5-timing_bug.gb"/>
+	<test rom="6-timing_no_bug.gb" hash="477a778841092a6d8b45ac9ac55a86a0a0646f5f"/>
+	<test rom="7-timing_effect.gb"/>
+	<test rom="8-instr_effect.gb"/>
 </tests>

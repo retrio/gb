@@ -261,7 +261,6 @@ class CPU
 				zf = sf = hf = false;
 			case 0x10:	// STOP
 				// TODO
-				throw "NYI " + StringTools.hex(op, 2);
 			case 0x11:	// LD DE,nn
 				de = read16pc();
 			case 0x12:	// LD (DE),A

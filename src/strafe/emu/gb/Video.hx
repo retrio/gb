@@ -13,6 +13,17 @@ abstract VideoMode(Int) from Int to Int
 }
 
 
+typedef SpriteInfo = {
+	var x:Int;
+	var y:Int;
+	var tile:Int;
+	var palette:Bool;	// true = second palette
+	var xflip:Bool;		// true = flipped
+	var yflip:Bool;		// true = flipped
+	var behindBg:Bool;	// false = above BG
+}
+
+
 @:build(strafe.macro.Optimizer.build())
 class Video
 {
@@ -53,6 +64,7 @@ class Video
 	var sp2Palette:Vector<Int> = Vector.fromArrayCopy([0, 1, 2, 3]);
 
 	var tileBuffer:ByteString;
+	var spriteInfo:Vector<SpriteInfo> = new Vector(40);
 
 	var scrollX:Int = 0;
 	var scrollY:Int = 0;
@@ -73,6 +85,8 @@ class Video
 		tileBuffer.fillWith(0);
 
 		screenBuffer.fillWith(0);
+
+		for (i in 0 ... 40) spriteInfo[i] = {x:0, y:0, tile:0, palette:false, xflip:false, yflip:false, behindBg:false};
 	}
 
 	public function init(cpu:CPU, cart:Cart)
@@ -169,8 +183,11 @@ class Video
 
 			// DMA
 			case 0xff46:
-				dmaAddress = value;
-				dma();
+				if (value > 0x7f && value < 0xe0)
+				{
+					dmaAddress = value;
+					dma();
+				}
 
 			// palettes
 			case 0xff47: setPalette(bgPalette, value);
@@ -193,6 +210,38 @@ class Video
 		}
 	}
 
+	public inline function oamRead(addr:Int)
+	{
+		return oam.get(addr - 0xfe00);
+	}
+
+	public inline function oamWrite(addr:Int, value:Int)
+	{
+		oam.set(addr - 0xfe00, value);
+
+		// update sprite info cache
+		var obj = (addr - 0xfe00) >> 2;
+		if (obj < 40)
+		{
+			var sprite = spriteInfo[obj];
+
+			switch (addr & 3)
+			{
+				case 0:
+					sprite.y = value - 16;
+				case 1:
+					sprite.x = value - 8;
+				case 2:
+					sprite.tile = value;
+				default:
+					sprite.palette = Util.getbit(value, 4);
+					sprite.xflip = Util.getbit(value, 5);
+					sprite.yflip = Util.getbit(value, 6);
+					sprite.behindBg = Util.getbit(value, 7);
+			}
+		}
+	}
+
 	inline function getPalette(pal:Vector<Int>)
 	{
 		return pal[0] | (pal[1] << 2) | (pal[2] << 4) | (pal[3] << 6);
@@ -208,8 +257,11 @@ class Video
 
 	inline function dma()
 	{
-		var startAddress = dmaAddress << 8;
-		// TODO
+		var startAddr = dmaAddress << 8;
+		@unroll for (i in 0 ... 160)
+		{
+			oamWrite(0xfe00 + i, cart.read(startAddr + i));
+		}
 	}
 
 	public function catchUp()
@@ -278,27 +330,90 @@ class Video
 		}
 	}
 
+	var _bg:Vector<Bool> = new Vector(160);
 	inline function renderScanline()
 	{
-		var mapOffset = bgTileAddr + ((((scanline + scrollY) & 0xff) >> 3) << 5);
-		var lineOffset = scrollX >> 3;
-		var y = (scanline + scrollY) & 0x7;
-		var x = scrollX & 0x7;
-		var bufferOffset = 160 * scanline;
-
-		var tile = vram[(mapOffset + lineOffset) & 0x1fff] & 0x1ff;
-		if (tileDataAddr == 0x8800 && tile < 0x80) tile += 0x100;
-
-		for (i in 0 ... 160)
+		// background tiles
+		if (bgDisplay)
 		{
-			var color = bgPalette[tileBuffer[(tile << 6) + (y << 3) + (x)]];
-			screenBuffer[bufferOffset++] = color;
-			if (++x == 8)
+			var mapOffset = bgTileAddr + ((((scanline + scrollY) & 0xff) >> 3) << 5);
+			var lineOffset = scrollX >> 3;
+			var y = (scanline + scrollY) & 0x7;
+			var x = scrollX & 0x7;
+			var bufferOffset = 160 * scanline;
+
+			var tile = vram[(mapOffset + lineOffset) & 0x1fff] & 0x1ff;
+			if (tileDataAddr == 0x8800 && tile < 0x80) tile += 0x100;
+
+			var value:Int, color:Int;
+			for (i in 0 ... 160)
 			{
-				x = 0;
-				lineOffset = (lineOffset + 1) & 0x1f;
-				tile = vram[(mapOffset + lineOffset) & 0x1fff] & 0x1ff;
-				if (tileDataAddr == 0x8800 && tile < 0x80) tile += 0x100;
+				value = tileBuffer[(tile << 6) + (y << 3) + (x)];
+				_bg[i] = value == 0;
+				color = bgPalette[value];
+				screenBuffer[bufferOffset++] = color;
+				if (++x == 8)
+				{
+					x = 0;
+					lineOffset = (lineOffset + 1) & 0x1f;
+					tile = vram[(mapOffset + lineOffset) & 0x1fff] & 0x1ff;
+					if (tileDataAddr == 0x8800 && tile < 0x80) tile += 0x100;
+				}
+			}
+		}
+
+		// sprites
+		if (objDisplay)
+		{
+			var height = tallSprites ? 16 : 8;
+			@unroll for (i in 0 ... 40)
+			{
+				var sprite = spriteInfo[i];
+				var x = sprite.x, y = sprite.y;
+				if (y <= scanline && y+height > scanline)
+				{
+					var pal = sprite.palette ? sp2Palette : sp1Palette;
+					var bufferOffset = 160 * scanline + x;
+					var tileRow = (sprite.tile << 6) + ((sprite.yflip ? (height - 1 - (scanline - y)) : (scanline - y)) << 3);
+
+					var value:Int, color:Int;
+					@unroll for (xi in 0 ... 8)
+					{
+						if (x + xi >= 0 && x + xi < 160 && (!sprite.behindBg || _bg[x+xi]))
+						{
+							value = tileBuffer[tileRow + (sprite.xflip ? (7-xi) : (xi))];
+							if (value > 0)
+							{
+								color = pal[value];
+								screenBuffer[bufferOffset+xi] = color;
+							}
+						}
+					}
+				}
+			}
+		}
+
+		// window
+		if (windowDisplay)
+		{
+			var mapOffset = windowTileAddr + ((((scanline + windowY) & 0xff) >> 3) << 5);
+			var lineOffset = windowX >> 3;
+			var y = (scanline + windowY) & 0x7;
+			var x = windowX & 0x7;
+			var bufferOffset = 160 * scanline;
+
+			var tile = (vram[(mapOffset + lineOffset) & 0x1fff] & 0x1ff) + 0x100;
+
+			for (i in 0 ... 160)
+			{
+				var color = bgPalette[tileBuffer[(tile << 6) + (y << 3) + (x)]];
+				if (color != 0) screenBuffer[bufferOffset++] = color;
+				if (++x == 8)
+				{
+					x = 0;
+					lineOffset = (lineOffset + 1) & 0x1f;
+					tile = (vram[(mapOffset + lineOffset) & 0x1fff] & 0x1ff) + 0x100;
+				}
 			}
 		}
 	}
