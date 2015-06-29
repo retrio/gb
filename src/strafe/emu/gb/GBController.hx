@@ -17,16 +17,16 @@ class GBController
 	{
 		return
 			(directionsEnabled ?
-				((controller.pressed(Button.Right) ? 0x1 : 0) |
-				(controller.pressed(Button.Left) ? 0x2 : 0) |
-				(controller.pressed(Button.Up) ? 0x4 : 0) |
-				(controller.pressed(Button.Down) ? 0x8 : 0))
+				((controller.pressed(Button.Right) ? 0 : 0x1) |
+				(controller.pressed(Button.Left) ? 0 : 0x2) |
+				(controller.pressed(Button.Up) ? 0 : 0x4) |
+				(controller.pressed(Button.Down) ? 0 : 0x8))
 			: 0x10) |
 			(buttonsEnabled ?
-				((controller.pressed(Button.A) ? 0x1 : 0) |
-				(controller.pressed(Button.B) ? 0x2 : 0) |
-				(controller.pressed(Button.Select) ? 0x4 : 0) |
-				(controller.pressed(Button.Start) ? 0x8 : 0))
+				((controller.pressed(Button.A) ? 0 : 0x1) |
+				(controller.pressed(Button.B) ? 0 : 0x2) |
+				(controller.pressed(Button.Select) ? 0 : 0x4) |
+				(controller.pressed(Button.Start) ? 0 : 0x8))
 			: 0x20);
 	}
 }
