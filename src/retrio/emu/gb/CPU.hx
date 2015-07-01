@@ -6,9 +6,6 @@ import haxe.ds.Vector;
 @:build(retrio.macro.Optimizer.build())
 class CPU
 {
-	// prevent emulation from hanging by yielding at least this frequently
-	static inline var MAX_CYCLES_PER_FRAME = 1000000000;
-
 	public var memory:Memory;
 	public var video:Video;
 
