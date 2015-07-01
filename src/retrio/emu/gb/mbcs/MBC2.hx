@@ -1,4 +1,4 @@
-package strafe.emu.gb.mbcs;
+package retrio.emu.gb.mbcs;
 
 
 class MBC2 extends MBC
@@ -8,7 +8,7 @@ class MBC2 extends MBC
 	var romBank(default, set):Int = 1;
 	inline function set_romBank(b:Int)
 	{
-		cart.rom2 = cart.romBanks[b];
+		memory.rom2 = memory.romBanks[b];
 		return romBank = b;
 	}
 

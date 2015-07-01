@@ -1,15 +1,15 @@
-package strafe.emu.gb;
+package retrio.emu.gb;
 
 import haxe.ds.Vector;
 
 
-@:build(strafe.macro.Optimizer.build())
+@:build(retrio.macro.Optimizer.build())
 class CPU
 {
 	// prevent emulation from hanging by yielding at least this frequently
-	static inline var MAX_CYCLES_PER_FRAME = 500000;
+	static inline var MAX_CYCLES_PER_FRAME = 1000000000;
 
-	public var cart:Cart;
+	public var memory:Memory;
 	public var video:Video;
 
 	public var cycleCount:Int = 0;
@@ -135,10 +135,9 @@ class CPU
 		interruptsRequested[Interrupt.Vblank] = true;
 	}
 
-	public function init(cart:Cart, video:Video)
+	public function init(memory:Memory, video:Video)
 	{
-		this.cart = cart;
-		cart.cpu = this;
+		this.memory = memory;
 		this.video = video;
 	}
 
@@ -155,17 +154,7 @@ class CPU
 
 		while (!video.finished)
 		{
-			if (++total + video.stolenCycles > MAX_CYCLES_PER_FRAME)
-				break;
-
-			if (halted)
-			{
-				predictHalt();
-			}
-			else
-			{
-				runCycle();
-			}
+			runCycle();
 
 			var projScanline = video.scanline + ((video.cycles + cycles) / 456);
 			if (halted || projScanline > video.scanline)
@@ -1646,14 +1635,7 @@ class CPU
 
 	inline function read(addr:Int)
 	{
-#if cputrace
-		//log += " R" + StringTools.hex(addr, 4);
-		var val = cart.read(addr) & 0xff;
-		//log += "=" + StringTools.hex(val, 2);
-		return val;
-#else
-		return cart.read(addr) & 0xff;
-#end
+		return memory.read(addr) & 0xff;
 	}
 
 	inline function read16(addr:Int)
@@ -1663,11 +1645,7 @@ class CPU
 
 	inline function write(addr:Int, value:Int)
 	{
-#if cputrace
-		//log += " W" + StringTools.hex(addr, 4);
-		//log += "=" + StringTools.hex(value & 0xff, 2);
-#end
-		cart.write(addr, value & 0xff);
+		memory.write(addr, value & 0xff);
 	}
 
 	inline function write16(addr:Int, value:Int)
@@ -1750,11 +1728,12 @@ class CPU
 		}
 		// TODO: serial
 
-		if (awake > 0)
+		if (awake > cycles)
 		{
-			if (awake > cycles) tick(awake - cycles);
-			halted = false;
+			tick(awake - cycles);
 		}
+
+		halted = false;
 	}
 
 	inline function tick(ticks:Int)

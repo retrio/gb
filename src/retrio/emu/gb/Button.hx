@@ -1,4 +1,4 @@
-package strafe.emu.gb;
+package retrio.emu.gb;
 
 
 @:enum

@@ -1,4 +1,4 @@
-package strafe.emu.gb;
+package retrio.emu.gb;
 
 import haxe.ds.Vector;
 
@@ -24,11 +24,11 @@ typedef SpriteInfo = {
 }
 
 
-@:build(strafe.macro.Optimizer.build())
+@:build(retrio.macro.Optimizer.build())
 class Video
 {
 	public var cpu:CPU;
-	public var cart:Cart;
+	public var memory:Memory;
 
 	public var screenBuffer:ByteString = new ByteString(160 * 144);
 
@@ -89,10 +89,10 @@ class Video
 		for (i in 0 ... 40) spriteInfo[i] = {x:0, y:0, tile:0, palette:false, xflip:false, yflip:false, behindBg:false};
 	}
 
-	public function init(cpu:CPU, cart:Cart)
+	public function init(cpu:CPU, memory:Memory)
 	{
 		this.cpu = cpu;
-		this.cart = cart;
+		this.memory = memory;
 	}
 
 	public inline function ioRead(addr:Int):Int
@@ -142,7 +142,7 @@ class Video
 			case 0xff4b: return windowX + 7;
 
 			default:
-				return cart.hram.get(addr - 0xfe00);
+				return memory.hram.get(addr - 0xfe00);
 		}
 	}
 
@@ -260,7 +260,7 @@ class Video
 		var startAddr = dmaAddress << 8;
 		@unroll for (i in 0 ... 160)
 		{
-			oamWrite(0xfe00 + i, cart.read(startAddr + i));
+			oamWrite(0xfe00 + i, memory.read(startAddr + i));
 		}
 	}
 
@@ -333,9 +333,9 @@ class Video
 	var _bg:Vector<Bool> = new Vector(160);
 	inline function renderScanline()
 	{
-		// background tiles
-		if (bgDisplay)
+		if (!windowDisplay || (scanline < windowY || windowX > 0))
 		{
+			// background tiles
 			var mapOffset = bgTileAddr + ((((scanline + scrollY) & 0xff) >> 3) << 5);
 			var lineOffset = scrollX >> 3;
 			var y = (scanline + scrollY) & 0x7;
@@ -346,9 +346,10 @@ class Video
 			if (tileDataAddr == 0x8800 && tile < 0x80) tile += 0x100;
 
 			var value:Int, color:Int;
-			for (i in 0 ... 160)
+			var pixelEnd:Int = (windowDisplay && scanline >= windowY) ? Std.int(Math.min(160, Math.max(windowX, 0))) : 160;
+			for (i in 0 ... pixelEnd)
 			{
-				value = tileBuffer[(tile << 6) + (y << 3) + (x)];
+				value = bgDisplay ? tileBuffer[(tile << 6) + (y << 3) + (x)] : 0;
 				_bg[i] = value == 0;
 				color = bgPalette[value];
 				screenBuffer[bufferOffset++] = color;
@@ -361,6 +362,43 @@ class Video
 				}
 			}
 		}
+		if (windowDisplay && scanline >= windowY)
+		{
+			// window
+			var mapOffset = windowTileAddr + ((((scanline - windowY) & 0xff) >> 3) << 5);
+			var lineOffset = windowX >> 3;
+			var y = scanline & 0x7;
+			var x = windowX & 0x7;
+			var bufferOffset = 160 * scanline;
+
+			var tile = (vram[(mapOffset + lineOffset) & 0x1fff] & 0x1ff);
+			if (tile < 0x80) tile += 0x100;
+
+			var value:Int, color:Int;
+			var pixelStart:Int = Std.int(Math.max(windowX, 0));
+			for (i in pixelStart ... 160)
+			{
+				value = tileBuffer[(tile << 6) + (y << 3) + (x)];
+				_bg[i] = value == 0;
+				color = bgPalette[value];
+				screenBuffer[bufferOffset++] = color;
+				if (++x == 8)
+				{
+					x = 0;
+					lineOffset = (lineOffset + 1);
+					tile = (vram[(mapOffset + lineOffset) & 0x1fff] & 0x1ff);
+					if (tile < 0x80) tile += 0x100;
+				}
+			}
+		}
+		if (!(bgDisplay || windowDisplay))
+		{
+			// nothing is visible
+			for (i in 160 * scanline ... 160 * (scanline + 1))
+				screenBuffer[i] = bgPalette[0];
+		}
+
+
 
 		// sprites
 		if (objDisplay)
@@ -389,30 +427,6 @@ class Video
 							}
 						}
 					}
-				}
-			}
-		}
-
-		// window
-		if (windowDisplay)
-		{
-			var mapOffset = windowTileAddr + ((((scanline + windowY) & 0xff) >> 3) << 5);
-			var lineOffset = windowX >> 3;
-			var y = (scanline + windowY) & 0x7;
-			var x = windowX & 0x7;
-			var bufferOffset = 160 * scanline;
-
-			var tile = (vram[(mapOffset + lineOffset) & 0x1fff] & 0x1ff) + 0x100;
-
-			for (i in 0 ... 160)
-			{
-				var color = bgPalette[tileBuffer[(tile << 6) + (y << 3) + (x)]];
-				if (color != 0) screenBuffer[bufferOffset++] = color;
-				if (++x == 8)
-				{
-					x = 0;
-					lineOffset = (lineOffset + 1) & 0x1f;
-					tile = (vram[(mapOffset + lineOffset) & 0x1fff] & 0x1ff) + 0x100;
 				}
 			}
 		}

@@ -1,9 +1,9 @@
-package strafe.emu.gb;
+package retrio.emu.gb;
 
 import haxe.ds.Vector;
 import haxe.io.Output;
-import strafe.FileWrapper;
-import strafe.IController;
+import retrio.FileWrapper;
+import retrio.IController;
 
 
 class GB implements IEmulator implements IState
@@ -19,7 +19,7 @@ class GB implements IEmulator implements IState
 
 	// hardware components
 	public var cpu:CPU;
-	public var cart:Cart;
+	public var memory:Memory;
 	public var video:Video;
 	public var controllers:Vector<GBController> = new Vector(2);
 
@@ -27,13 +27,15 @@ class GB implements IEmulator implements IState
 
 	public function loadGame(gameData:FileWrapper)
 	{
-		cart = new Cart(gameData);
+		var rom = new ROM(gameData);
+
+		memory = new Memory(rom);
 		cpu = new CPU();
 		video = new Video();
 
-		cpu.init(cart, video);
-		video.init(cpu, cart);
-		cart.init(video, controllers);
+		cpu.init(memory, video);
+		video.init(cpu, memory);
+		memory.init(cpu, video, controllers);
 
 		buffer = video.screenBuffer;
 	}

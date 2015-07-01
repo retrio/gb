@@ -1,4 +1,4 @@
-package strafe.emu.gb.mbcs;
+package retrio.emu.gb.mbcs;
 
 
 class MBC3 extends MBC
@@ -8,7 +8,7 @@ class MBC3 extends MBC
 	var romBank(default, set):Int = 1;
 	inline function set_romBank(b:Int)
 	{
-		cart.rom2 = cart.romBanks[b];
+		memory.rom2 = memory.romBanks[b];
 		return romBank = b;
 	}
 
@@ -32,12 +32,12 @@ class MBC3 extends MBC
 				{
 					if (val >= 0x8 && val <= 0xc)
 					{
-						cart.rtc = val;
+						memory.rtc.register = val;
 					}
 					else
 					{
-						cart.rtc = 0;
-						cart.ram = cart.ramBanks[val & 0x3];
+						memory.rtc.register = 0;
+						memory.ram = memory.ramBanks[val & 0x3];
 					}
 				}
 			case 0x6000, 0x7000:

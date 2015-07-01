@@ -1,49 +1,36 @@
-package strafe.emu.gb;
+package retrio.emu.gb;
 
 import haxe.ds.Vector;
-import strafe.emu.gb.mbcs.*;
+import retrio.emu.gb.mbcs.*;
 
 
-class Cart
+class Memory
 {
-	public var name:String;
-	public var gbc:Bool;
-	public var sgb:Bool;
-	public var japan:Bool;
-	public var version:Int;
-	public var checksum:Int;
-	public var globalChecksum:Int;
-
-	public var romSize:Int;
-	public var ramSize:Int;
-
-	public var cpu:CPU;
+	public var rom:ROM;
 	public var mbc:MBC;
+	public var cpu:CPU;
 	public var video:Video;
-
-	public var rom1:ByteString;		// fixed ROM bank
-	public var rom2:ByteString;		// switchable ROM bank
+	public var rtc:RTC;
 
 	public var ram:ByteString;		// external RAM
 	public var wram1:ByteString;	// fixed work RAM
 	public var wram2:ByteString;	// switchable work RAM
 	public var hram:ByteString;		// HRAM
 
+	public var rom1:ByteString;		// fixed ROM bank
+	public var rom2:ByteString;		// switchable ROM bank
 	public var romBanks:Vector<ByteString>;
 	public var ramBanks:Vector<ByteString>;
 	public var wramBanks:Vector<ByteString>;
-
-	public var rtc:Int = 0;			// RTC register selected or 0 if none
-
-	var rtcTime:Date = Date.now();	// latched RTC time
-	var rtcLatch:Bool = false;
 
 	var joypadButtons:Bool = false;
 
 	var controllers:Vector<GBController>;
 
-	public function new(file:FileWrapper)
+	public function new(rom:ROM)
 	{
+		rom1 = rom.fixedRom;
+
 		// initial memory allocation
 		hram = new ByteString(0x200);
 		hram.fillWith(0);
@@ -57,97 +44,49 @@ class Cart
 		wram1 = wramBanks[0];
 		wram2 = wramBanks[1];
 
-		// read fixed ROM bank
-		rom1 = new ByteString(0x4000);
-		rom1.readFrom(file);
-
-		name = "";
-		for (i in 0x134 ... 0x144)
-		{
-			var c = rom1[i];
-			if (c > 0) name += String.fromCharCode(c);
-		}
-
-		sgb = rom1.get(0x146) != 0;
-
-		var cartType = rom1[0x147];
-		switch (cartType)
+		// MBC
+		mbc = switch (rom.cartType)
 		{
 			case 0x00, 0x08, 0x09:
-				mbc = new NoMBC();
+				new NoMBC();
 			case 0x01, 0x02, 0x03:
-				mbc = new MBC1();
+				new MBC1();
 			case 0x05, 0x06:
-				mbc = new MBC2();
+				new MBC2();
 			case 0xf, 0x10, 0x11, 0x12, 0x13:
-				mbc = new MBC3();
+				new MBC3();
 			// TODO: MBC5
 			default:
-				throw "Cart type " + StringTools.hex(cartType) + " not supported";
+				throw "Cart type " + StringTools.hex(rom.cartType) + " not supported";
 		}
-		mbc.cart = this;
+		mbc.memory = this;
 
-		// read additional ROM banks
-		var romSizeByte = rom1[0x148];
-		var romBankCount:Int;
-		if (romSizeByte < 8)
-		{
-			romSize = 0x8000 * Std.int(Math.pow(2, romSizeByte));
-			romBankCount = Std.int(romSize / 0x4000);
-		}
-		else
-		{
-			switch(romSizeByte)
-			{
-				case 0x52:
-					romBankCount = 72;
-				case 0x53:
-					romBankCount = 80;
-				case 0x54:
-					romBankCount = 96;
-				default:
-					throw "Unrecognized rom size byte: " + StringTools.hex(romSizeByte);
-			}
-			romSize = romBankCount * 0x4000;
-		}
-
-		romBanks = new Vector(romBankCount);
+		// additional ROM banks
+		romBanks = new Vector(rom.romBankCount);
 		romBanks[0] = rom1;
-		for (i in 1 ... romBankCount)
+		for (i in 1 ... rom.romBankCount)
 		{
 			romBanks[i] = new ByteString(0x4000);
-			romBanks[i].readFrom(file);
+			romBanks[i].readFrom(rom.data);
 		}
 		rom2 = romBanks[1];
 
-		var ramSizeByte = rom1[0x149];
-		ramSize = switch(ramSizeByte)
-		{
-			case 1: 0x2000;
-			case 2: 0x4000;
-			case 3: 0x8000;
-			case 4: 0x20000;
-			case 5: 0x10000;
-			default: 0;
-		}
-		var ramBankCount = Std.int(Math.max(Math.ceil(ramSize/0x2000), 1));
-		ramBanks = new Vector(ramBankCount);
-		for (i in 0 ... ramBankCount)
+		// set up RAM
+		ramBanks = new Vector(rom.ramBankCount);
+		for (i in 0 ... rom.ramBankCount)
 		{
 			ramBanks[i] = new ByteString(0x2000);
 			ramBanks[i].fillWith(0);
 		}
 		ram = ramBanks[0];
 
-		japan = rom1[0x14a] == 0;
-		version = rom1[0x14c];
-		checksum = rom1[0x14d];
-
-		globalChecksum = (rom1[0x14e] << 8) | rom1[0x14f];
+		// real time clock
+		rtc = new RTC();
 	}
 
-	public function init(video:Video, controllers:Vector<GBController>)
+	public function init(cpu:CPU, video:Video, controllers:Vector<GBController>)
 	{
+		this.cpu = cpu;
 		this.video = video;
 		this.controllers = controllers;
 
@@ -168,8 +107,7 @@ class Cart
 			case 0x8000, 0x9000:
 				return video.vramRead(addr);
 			case 0xa000, 0xb000:
-				if (rtc > 0) return rtcRead();
-				else return ram[addr-0xa000];
+				return (rtc.register > 0) ? rtc.read() : ram[addr-0xa000];
 			case 0xc000:
 				return wram1[addr-0xc000];
 			case 0xd000:
@@ -214,7 +152,6 @@ class Cart
 
 	public function write(addr:Int, value:Int):Void
 	{
-		//trace(StringTools.hex(addr), StringTools.hex(value));
 		switch (addr & 0xF000)
 		{
 			case 0x0000, 0x1000, 0x2000, 0x3000,
@@ -224,7 +161,7 @@ class Cart
 			case 0x8000, 0x9000:
 				video.vramWrite(addr, value);
 			case 0xa000, 0xb000:
-				if (rtc > 0) rtcWrite(value);
+				if (rtc.register > 0) rtc.write(value);
 				else ram.set(addr-0xa000, value);
 			case 0xc000:
 				wram1.set(addr-0xc000, value);
@@ -294,7 +231,6 @@ class Cart
 
 	inline function ioWrite(addr:Int, value:Int):Void
 	{
-		//trace(StringTools.hex(addr), value);
 		switch(addr)
 		{
 			case 0xff00:
@@ -319,38 +255,6 @@ class Cart
 			case 0xff0f: cpu.interruptsRequestedFlag = value;
 
 			default: {}
-		}
-	}
-
-	inline function rtcRead():Int
-	{
-		switch (rtc)
-		{
-			case 0x8: return rtcTime.getSeconds();
-			case 0x9: return rtcTime.getMinutes();
-			case 0xa: return rtcTime.getHours();
-			case 0xb:
-				return Std.int((Date.now().getTime() - rtcTime.getTime()) / 86400) & 0xff;
-			case 0xc:
-				var dayCounter = Std.int((Date.now().getTime() - rtcTime.getTime()) / 86400);
-				return ((dayCounter >> 8) & 1) | (dayCounter > 511 ? 0x80 : 0);
-			default: return 0xff;
-		}
-	}
-
-	inline function rtcWrite(value:Int):Void
-	{
-		if (rtcLatch)
-		{
-			if (value == 1)
-			{
-				rtcTime = Date.now();
-			}
-			else rtcLatch = false;
-		}
-		else
-		{
-			rtcLatch = value == 0;
 		}
 	}
 

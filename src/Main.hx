@@ -1,11 +1,11 @@
-import strafe.ui.openfl.KeyboardController;
-import strafe.FileWrapper;
-import strafe.ui.openfl.GBPlugin;
-import strafe.ui.openfl.Shell;
-import strafe.emu.gb.Button;
+import retrio.ui.openfl.KeyboardController;
+import retrio.FileWrapper;
+import retrio.ui.openfl.GBPlugin;
+import retrio.ui.openfl.Shell;
+import retrio.emu.gb.Button;
 
 
-class Main extends strafe.ui.openfl.Shell
+class Main extends retrio.ui.openfl.Shell
 {
 	function new()
 	{
@@ -45,7 +45,7 @@ class Main extends strafe.ui.openfl.Shell
 		super.onStage(e);
 
 		var plugin = new GBPlugin();
-		var controller = new strafe.ui.openfl.KeyboardController();
+		var controller = new retrio.ui.openfl.KeyboardController();
 
 		var keyDefaults:Map<Button, Int> = [
 			Button.A => 76,

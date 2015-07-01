@@ -1,4 +1,4 @@
-package strafe.emu.gb.mbcs;
+package retrio.emu.gb.mbcs;
 
 
 class NoMBC extends MBC {}

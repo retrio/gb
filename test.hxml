@@ -3,6 +3,13 @@
 -cp src
 -D test
 -lib format
--lib strafe-core
+-lib retrio-core
+
+
+--each
 
 -cpp test
+
+--next
+
+-neko test.n
