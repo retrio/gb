@@ -104,10 +104,7 @@ class GB implements IEmulator implements IState
 	{
 		if (rom.hasSram && memory.sramDirty && io != null)
 		{
-			for (i in 0 ... memory.ramBanks.length)
-			{
-				io.writeFile(romName + ".srm", memory.ramBanks[i], i > 0);
-			}
+			io.writeVectorToFile(romName + ".srm", memory.ramBanks);
 			memory.sramDirty = false;
 			_saveCounter = 0;
 		}
@@ -118,11 +115,14 @@ class GB implements IEmulator implements IState
 		if (io.fileExists(romName + ".srm"))
 		{
 			var file = io.readFile(romName + ".srm");
-			for (bank in memory.ramBanks)
+			if (file != null)
 			{
-				bank.readFrom(file);
+				for (bank in memory.ramBanks)
+				{
+					bank.readFrom(file);
+				}
+				memory.sramDirty = false;
 			}
-			memory.sramDirty = false;
 		}
 	}
 
