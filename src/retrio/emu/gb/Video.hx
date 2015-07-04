@@ -336,7 +336,7 @@ class Video
 		if (!windowDisplay || (scanline < windowY || windowX > 0))
 		{
 			// background tiles
-			var mapOffset = bgTileAddr + ((((scanline + scrollY) & 0xff) >> 3) << 5);
+			var mapOffset = bgTileAddr + (((scanline + scrollY) & 0xf8) << 2);
 			var lineOffset = scrollX >> 3;
 			var y = (scanline + scrollY) & 0x7;
 			var x = scrollX & 0x7;
@@ -365,17 +365,17 @@ class Video
 		if (windowDisplay && scanline >= windowY)
 		{
 			// window
-			var mapOffset = windowTileAddr + ((((scanline - windowY) & 0xff) >> 3) << 5);
-			var lineOffset = windowX >> 3;
+			var mapOffset = windowTileAddr + (((scanline - windowY) & 0xf8) << 2);
+			var lineOffset = 0;
 			var y = scanline & 0x7;
-			var x = windowX & 0x7;
-			var bufferOffset = 160 * scanline;
+			var x = 0;
+			var pixelStart = Std.int(Math.min(160, Math.max(windowX, 0)));
+			var bufferOffset = 160 * scanline + pixelStart;
 
 			var tile = (vram[(mapOffset + lineOffset) & 0x1fff] & 0x1ff);
 			if (tile < 0x80) tile += 0x100;
 
 			var value:Int, color:Int;
-			var pixelStart:Int = Std.int(Math.max(windowX, 0));
 			for (i in pixelStart ... 160)
 			{
 				value = tileBuffer[(tile << 6) + (y << 3) + (x)];
@@ -393,12 +393,14 @@ class Video
 		}
 		if (!(bgDisplay || windowDisplay))
 		{
+			var bufferOffset = 160 * scanline;
 			// nothing is visible
-			for (i in 160 * scanline ... 160 * (scanline + 1))
-				screenBuffer[i] = bgPalette[0];
+			for (i in 0 ... 160)
+			{
+				screenBuffer[bufferOffset + i] = bgPalette[0];
+				_bg[i] = false;
+			}
 		}
-
-
 
 		// sprites
 		if (objDisplay)
@@ -406,7 +408,7 @@ class Video
 			var height = tallSprites ? 16 : 8;
 			@unroll for (i in 0 ... 40)
 			{
-				var sprite = spriteInfo[i];
+				var sprite = spriteInfo[39-i];
 				var x = sprite.x, y = sprite.y;
 				if (y <= scanline && y+height > scanline)
 				{

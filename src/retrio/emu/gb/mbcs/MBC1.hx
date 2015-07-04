@@ -8,7 +8,7 @@ class MBC1 extends MBC
 	var romBank(default, set):Int = 1;
 	inline function set_romBank(b:Int)
 	{
-		memory.rom2 = memory.romBanks[b];
+		memory.rom2 = memory.romBanks[b % memory.romBanks.length];
 		return romBank = b;
 	}
 
@@ -25,15 +25,22 @@ class MBC1 extends MBC
 			case 0x4000, 0x5000:
 				if (romSelect)
 				{
-					var upper = val & 0xe0;
-					romBank = (romBank & 0x1f) | upper;
+					romBank = (romBank & 0x1f) | ((val & 0x3) << 5);
 				}
 				else
 				{
 					memory.ram = memory.ramBanks[val & 0x3];
 				}
 			case 0x6000, 0x7000:
-				romSelect = val != 0;
+				romSelect = (val & 1) == 0;
+				if (romSelect)
+				{
+					memory.ram = memory.ramBanks[0];
+				}
+				else
+				{
+					romBank &= 0x1f;
+				}
 		}
 	}
 }
