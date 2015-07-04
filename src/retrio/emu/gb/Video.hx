@@ -331,6 +331,7 @@ class Video
 	}
 
 	var _bg:Vector<Bool> = new Vector(160);
+	var _spritePriority:Vector<Int> = new Vector(160);
 	inline function renderScanline()
 	{
 		if (!windowDisplay || (scanline < windowY || windowX > 0))
@@ -406,9 +407,15 @@ class Video
 		if (objDisplay)
 		{
 			var height = tallSprites ? 16 : 8;
-			@unroll for (i in 0 ... 40)
+			// when sprites overlap, the one further to the left takes priority
+			// TODO: in color mode, this isn't the case
+			for (i in 0 ... 160)
 			{
-				var sprite = spriteInfo[39-i];
+				_spritePriority[i] = 0xff;
+			}
+			var spriteCount:Int = 0;
+			for (sprite in spriteInfo)
+			{
 				var x = sprite.x, y = sprite.y;
 				if (y <= scanline && y+height > scanline)
 				{
@@ -416,19 +423,23 @@ class Video
 					var bufferOffset = 160 * scanline + x;
 					var tileRow = (sprite.tile << 6) + ((sprite.yflip ? (height - 1 - (scanline - y)) : (scanline - y)) << 3);
 
+					var displayed:Bool = false;
 					var value:Int, color:Int;
 					@unroll for (xi in 0 ... 8)
 					{
-						if (x + xi >= 0 && x + xi < 160 && (!sprite.behindBg || _bg[x+xi]))
+						if (x + xi >= 0 && x + xi < 160 && (!sprite.behindBg || _bg[x+xi]) && x < _spritePriority[x + xi])
 						{
 							value = tileBuffer[tileRow + (sprite.xflip ? (7-xi) : (xi))];
 							if (value > 0)
 							{
+								displayed = true;
 								color = pal[value];
 								screenBuffer[bufferOffset+xi] = color;
+								_spritePriority[x + xi] = x;
 							}
 						}
 					}
+					if (displayed) if (++spriteCount >= 10) break;
 				}
 			}
 		}
