@@ -23,6 +23,8 @@ class Memory
 	public var ramBanks:Vector<ByteString>;
 	public var wramBanks:Vector<ByteString>;
 
+	public var sramDirty:Bool = false;
+
 	var joypadButtons:Bool = false;
 
 	var controllers:Vector<GBController>;
@@ -162,7 +164,12 @@ class Memory
 				video.vramWrite(addr, value);
 			case 0xa000, 0xb000:
 				if (rtc.register > 0) rtc.write(value);
-				else ram.set(addr-0xa000, value);
+				else
+				{
+					var a = addr-0xa000;
+					sramDirty = sramDirty || ram[a] != value;
+					ram.set(a, value);
+				}
 			case 0xc000:
 				wram1.set(addr-0xc000, value);
 			case 0xd000:

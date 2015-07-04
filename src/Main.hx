@@ -1,7 +1,7 @@
-import retrio.ui.openfl.KeyboardController;
 import retrio.FileWrapper;
 import retrio.ui.openfl.GBPlugin;
 import retrio.ui.openfl.Shell;
+import retrio.ui.openfl.controllers.KeyboardController;
 import retrio.emu.gb.Button;
 
 
@@ -9,7 +9,7 @@ class Main extends retrio.ui.openfl.Shell
 {
 	function new()
 	{
-		super();
+		super(retrio.io.IO.defaultIO);
 
 #if (cpp && profile)
 		cpp.vm.Profiler.start();
@@ -44,8 +44,7 @@ class Main extends retrio.ui.openfl.Shell
 	{
 		super.onStage(e);
 
-		var plugin = new GBPlugin();
-		var controller = new retrio.ui.openfl.KeyboardController();
+		var controller = new KeyboardController();
 
 		var keyDefaults:Map<Button, Int> = [
 			Button.A => 76,
@@ -60,8 +59,7 @@ class Main extends retrio.ui.openfl.Shell
 		for (btn in keyDefaults.keys())
 			controller.defineKey(keyDefaults[btn], btn);
 
-		plugin.addController(controller);
-
-		loadPlugin(plugin);
+		loadPlugin("gb");
+		addController(controller);
 	}
 }

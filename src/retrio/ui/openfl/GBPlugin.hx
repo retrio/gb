@@ -15,31 +15,10 @@ import retrio.emu.gb.GB;
 import retrio.emu.gb.Palette;
 
 
+@:access(retrio.emu.gb.GB)
 class GBPlugin extends EmulatorPlugin
 {
-	var loopStart:Int = 0;
-	var loopEnd:Int = 0;
-	var clipTop(default, set):Int = 0;
-	var clipBottom(default, set):Int = 0;
-	function set_clipTop(y:Int)
-	{
-		clipTop = y;
-		setClip();
-		return y;
-	}
-	function set_clipBottom(y:Int)
-	{
-		clipBottom = y;
-		setClip();
-		return y;
-	}
-	function setClip()
-	{
-		loopStart = clipTop*GB.WIDTH;
-		loopEnd = (GB.HEIGHT-(clipBottom))*GB.WIDTH;
-		r.height = GB.HEIGHT-clipBottom-clipTop;
-		bmpData.fillRect(bmpData.rect, 0xff000000);
-	}
+	static var _registered = Shell.registerPlugin("gb", new GBPlugin());
 
 	var _stage(get, never):flash.display.Stage;
 	inline function get__stage() return Lib.current.stage;
@@ -60,17 +39,12 @@ class GBPlugin extends EmulatorPlugin
 		this.emu = this.gb = new GB();
 		extensions = gb.extensions;
 
-		_stage.quality = flash.display.StageQuality.LOW;
 		bmpData = new BitmapData(GB.WIDTH, GB.HEIGHT, false, 0);
 
 		pixels.endian = Endian.BIG_ENDIAN;
 		pixels.clear();
 		for (i in 0 ... GB.WIDTH*GB.HEIGHT*4)
 			pixels.writeByte(0);
-
-		Memory.select(pixels);
-
-		clipTop = clipBottom = 0;
 	}
 
 	override public function resize(width:Int, height:Int)
@@ -107,9 +81,9 @@ class GBPlugin extends EmulatorPlugin
 			}
 
 			var bm = gb.buffer;
-			for (i in loopStart ... loopEnd) // GB.WIDTH x GB.HEIGHT
+			for (i in 0 ... GB.WIDTH * GB.HEIGHT)
 			{
-				Memory.setI32((i-loopStart)*4, Palette.getColor(bm.get(i)));
+				Memory.setI32(i*4, Palette.getColor(bm.get(i)));
 			}
 
 			pixels.position = 0;
@@ -118,13 +92,23 @@ class GBPlugin extends EmulatorPlugin
 		}
 	}
 
+	override public function activate()
+	{
+		Memory.select(pixels);
+	}
+
+	override public function deactivate()
+	{
+		gb.saveSram();
+	}
+
 	function initScreen(width:Int, height:Int)
 	{
 		canvas = new BitmapData(width, height, false, 0);
 		bmp = new Bitmap(canvas);
 		addChild(bmp);
 
-		var sx = canvas.width / GB.WIDTH, sy = canvas.height / (GB.HEIGHT-clipTop-clipBottom);
+		var sx = canvas.width / GB.WIDTH, sy = canvas.height / (GB.HEIGHT);
 		m.setTo(sx, 0, 0, sy, 0, 0);
 
 		initialized = true;
@@ -132,7 +116,7 @@ class GBPlugin extends EmulatorPlugin
 
 	override public function capture()
 	{
-		var capture = new BitmapData(bmpData.width, bmpData.height - clipTop - clipBottom);
+		var capture = new BitmapData(bmpData.width, bmpData.height);
 		capture.copyPixels(bmpData, capture.rect, new flash.geom.Point());
 		return capture;
 	}

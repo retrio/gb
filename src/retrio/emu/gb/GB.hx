@@ -2,18 +2,19 @@ package retrio.emu.gb;
 
 import haxe.ds.Vector;
 import haxe.io.Output;
-import retrio.FileWrapper;
-import retrio.IController;
 
 
 class GB implements IEmulator implements IState
 {
 	public static inline var WIDTH:Int = 160;
 	public static inline var HEIGHT:Int = 144;
+	// minimum # of frames to wait between saves
+	public static inline var SRAM_SAVE_FRAMES = 60;
 
 	public var width:Int = WIDTH;
 	public var height:Int = HEIGHT;
 
+	public var io:IEnvironment;
 	public var buffer:ByteString;
 	public var extensions:Array<String> = ["*.gb"];
 
@@ -21,13 +22,17 @@ class GB implements IEmulator implements IState
 	public var cpu:CPU;
 	public var memory:Memory;
 	public var video:Video;
+	public var rom:ROM;
 	public var controllers:Vector<GBController> = new Vector(2);
+
+	var _saveCounter:Int = 0;
+	var romName:String;
 
 	public function new() {}
 
 	public function loadGame(gameData:FileWrapper)
 	{
-		var rom = new ROM(gameData);
+		rom = new ROM(gameData);
 
 		memory = new Memory(rom);
 		cpu = new CPU();
@@ -38,6 +43,9 @@ class GB implements IEmulator implements IState
 		memory.init(cpu, video, controllers);
 
 		buffer = video.screenBuffer;
+
+		romName = gameData.name;
+		loadSram();
 	}
 
 	public function reset():Void
@@ -48,6 +56,18 @@ class GB implements IEmulator implements IState
 	public function frame()
 	{
 		cpu.runFrame();
+		if (memory.sramDirty)
+		{
+			if (_saveCounter < SRAM_SAVE_FRAMES)
+			{
+				++_saveCounter;
+			}
+			else
+			{
+				saveSram();
+			}
+		}
+		else _saveCounter = 0;
 	}
 
 	public function addController(controller:IController, ?port:Int=null):Null<Int>
@@ -78,6 +98,32 @@ class GB implements IEmulator implements IState
 	public function getColor(c:Int)
 	{
 		return Palette.getColor(c);
+	}
+
+	function saveSram()
+	{
+		if (rom.hasSram && memory.sramDirty && io != null)
+		{
+			for (i in 0 ... memory.ramBanks.length)
+			{
+				io.writeFile(romName + ".srm", memory.ramBanks[i], i > 0);
+			}
+			memory.sramDirty = false;
+			_saveCounter = 0;
+		}
+	}
+
+	function loadSram()
+	{
+		if (io.fileExists(romName + ".srm"))
+		{
+			var file = io.readFile(romName + ".srm");
+			for (bank in memory.ramBanks)
+			{
+				bank.readFrom(file);
+			}
+			memory.sramDirty = false;
+		}
 	}
 
 	public function writeState(out:Output)

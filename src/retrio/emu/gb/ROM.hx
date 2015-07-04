@@ -13,6 +13,7 @@ class ROM
 	public var version:Int;
 	public var checksum:Int;
 	public var globalChecksum:Int;
+	public var hasSram:Bool;
 
 	public var romSize:Int;
 	public var ramSize:Int;
@@ -40,6 +41,13 @@ class ROM
 		sgb = fixedRom.get(0x146) != 0;
 
 		cartType = fixedRom[0x147];
+		hasSram = switch(cartType)
+		{
+			case 0x03, 0x06, 0x09, 0x0d, 0x0f, 0x10, 0x13, 0x17, 0x1b, 0x1e, 0xff:
+				true;
+			default:
+				false;
+		}
 
 		// read additional ROM banks
 		var romSizeByte = fixedRom[0x148];
