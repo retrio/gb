@@ -94,11 +94,13 @@ class GBPlugin extends EmulatorPlugin
 
 	override public function activate()
 	{
+		super.activate();
 		Memory.select(pixels);
 	}
 
 	override public function deactivate()
 	{
+		super.deactivate();
 		gb.saveSram();
 	}
 
@@ -119,5 +121,24 @@ class GBPlugin extends EmulatorPlugin
 		var capture = new BitmapData(bmpData.width, bmpData.height);
 		capture.copyPixels(bmpData, capture.rect, new flash.geom.Point());
 		return capture;
+	}
+
+	override public function getSamples(e:Dynamic)
+	{
+		gb.audio.catchUp();
+
+		var l = Std.int(Math.max(0, 0x800 - gb.audio.buffer1.length));
+
+		for (i in 0 ... l)
+		{
+			e.data.writeFloat(gb.audio.buffer1.get(0));
+			e.data.writeFloat(gb.audio.buffer2.get(0));
+		}
+
+		for (i in l ... 0x800)
+		{
+			e.data.writeFloat(gb.audio.buffer1.pop());
+			e.data.writeFloat(gb.audio.buffer2.pop());
+		}
 	}
 }

@@ -4,6 +4,7 @@
 -D test
 -lib format
 -lib retrio-core
+-lib systools
 
 
 --each

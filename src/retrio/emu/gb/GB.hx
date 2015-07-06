@@ -21,31 +21,36 @@ class GB implements IEmulator implements IState
 	// hardware components
 	public var cpu:CPU;
 	public var memory:Memory;
-	public var video:Video;
 	public var rom:ROM;
+	public var video:Video;
+	public var audio:Audio;
 	public var controllers:Vector<GBController> = new Vector(2);
 
 	var _saveCounter:Int = 0;
 	var romName:String;
+	var useSram:Bool = true;
 
 	public function new() {}
 
-	public function loadGame(gameData:FileWrapper)
+	public function loadGame(gameData:FileWrapper, ?useSram:Bool=true)
 	{
 		rom = new ROM(gameData);
 
 		memory = new Memory(rom);
 		cpu = new CPU();
 		video = new Video();
+		audio = new Audio();
 
-		cpu.init(memory, video);
+		cpu.init(memory, video, audio);
 		video.init(cpu, memory);
-		memory.init(cpu, video, controllers);
+		audio.init(cpu, memory);
+		memory.init(cpu, video, audio, controllers);
 
 		buffer = video.screenBuffer;
 
 		romName = gameData.name;
-		loadSram();
+		this.useSram = useSram;
+		if (useSram) loadSram();
 	}
 
 	public function reset():Void
@@ -102,7 +107,7 @@ class GB implements IEmulator implements IState
 
 	function saveSram()
 	{
-		if (rom.hasSram && memory.sramDirty && io != null)
+		if (useSram && rom.hasSram && memory.sramDirty && io != null)
 		{
 			io.writeVectorToFile(romName + ".srm", memory.ramBanks);
 			memory.sramDirty = false;
@@ -112,7 +117,7 @@ class GB implements IEmulator implements IState
 
 	function loadSram()
 	{
-		if (io.fileExists(romName + ".srm"))
+		if (useSram && io.fileExists(romName + ".srm"))
 		{
 			var file = io.readFile(romName + ".srm");
 			if (file != null)

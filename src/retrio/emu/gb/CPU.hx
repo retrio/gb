@@ -8,9 +8,11 @@ class CPU
 {
 	public var memory:Memory;
 	public var video:Video;
+	public var audio:Audio;
 
 	public var cycleCount:Int = 0;
 	public var cycles:Int = 0;
+	public var apuCycles:Float = 0;
 
 	// timers
 	public var divTicks:Int = 0;
@@ -132,10 +134,11 @@ class CPU
 		interruptsRequested[Interrupt.Vblank] = true;
 	}
 
-	public function init(memory:Memory, video:Video)
+	public function init(memory:Memory, video:Video, audio:Audio)
 	{
 		this.memory = memory;
 		this.video = video;
+		this.audio = audio;
 	}
 
 	public function irq(interruptType:Interrupt)
@@ -172,6 +175,8 @@ class CPU
 				}
 			}
 		}
+
+		audio.catchUp();
 	}
 
 	inline function runCycle()
@@ -1737,6 +1742,7 @@ class CPU
 	{
 		cycleCount += ticks;
 		cycles += ticks;
+		apuCycles += ticks;
 		divTicks += ticks;
 		if (timerEnabled)
 		{

@@ -10,6 +10,7 @@ class Memory
 	public var mbc:MBC;
 	public var cpu:CPU;
 	public var video:Video;
+	public var audio:Audio;
 	public var rtc:RTC;
 
 	public var ram:ByteString;		// external RAM
@@ -86,10 +87,11 @@ class Memory
 		rtc = new RTC();
 	}
 
-	public function init(cpu:CPU, video:Video, controllers:Vector<GBController>)
+	public function init(cpu:CPU, video:Video, audio:Audio, controllers:Vector<GBController>)
 	{
 		this.cpu = cpu;
 		this.video = video;
+		this.audio = audio;
 		this.controllers = controllers;
 
 		for (key in _regs.keys())
@@ -232,7 +234,7 @@ class Memory
 					default: 0;
 				}) | (cpu.timerEnabled ? 0x4 : 0);
 			case 0xff0f: return 0xe0 | cpu.interruptsRequestedFlag;
-			default: return 0;
+			default: return audio.read(addr);
 		}
 	}
 
@@ -261,7 +263,7 @@ class Memory
 				cpu.timerEnabled = Util.getbit(value, 2);
 			case 0xff0f: cpu.interruptsRequestedFlag = value;
 
-			default: {}
+			default: return audio.write(addr, value);
 		}
 	}
 
