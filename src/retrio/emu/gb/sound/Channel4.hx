@@ -12,7 +12,7 @@ class Channel4 implements ISoundGenerator
 	public var length(default, set):Int = 0;
 	function set_length(l:Int)
 	{
-		lengthCounter = l;
+		lengthCounter = 64-l;
 		return length = l;
 	}
 	public var lengthCounter:Int = 0;
@@ -20,8 +20,8 @@ class Channel4 implements ISoundGenerator
 	public var frequency(default, set):Int = 0;
 	inline function set_frequency(f:Int)
 	{
-		var freq = Std.int(0x10000/(0x800-f));
-		cycleLength = Math.ceil(48*Audio.SAMPLE_RATE / freq);
+		cycleLengthNumerator = Audio.NATIVE_SAMPLE_RATE * (0x800 - f);
+		cycleLengthDenominator = 0x20000;
 		return frequency = f;
 	}
 
@@ -31,8 +31,9 @@ class Channel4 implements ISoundGenerator
 	public var envelopeCounter:Int = 0;
 
 	var amplitude:Int = 0;
-	var cycleLength:Int = 0;
-	var pos:Int = 0;
+	var cycleLengthNumerator:Int = 1;
+	var cycleLengthDenominator:Int = 1;
+	var cyclePos:Int = 0;
 
 	public function new()
 	{
@@ -59,16 +60,16 @@ class Channel4 implements ISoundGenerator
 		enabled = true;
 		repeat = true;
 		if (lengthCounter == 0) lengthCounter = 0x40;
-		pos = 0;
+		cyclePos = 0;
 	}
 
 	public inline function lengthClock():Void
 	{
-		if (!repeat && lengthCounter > 0)
+		if (lengthCounter > 0)
 		{
 			if (--lengthCounter == 0)
 			{
-				if (!repeat) enabled = false;
+				enabled = repeat;
 			}
 		}
 	}
@@ -94,12 +95,12 @@ class Channel4 implements ISoundGenerator
 
 	public inline function play():Int
 	{
-		pos = (pos + Audio.NATIVE_SAMPLE_RATIO) % cycleLength;
-
 		var val = 0;
 		if (enabled)
 		{
-			val = (randomValues[pos & (randomValues.length - 1)]) ? amplitude : -amplitude;
+			cyclePos += (cycleLengthDenominator * Audio.NATIVE_SAMPLE_RATIO);
+			if (cyclePos >= cycleLengthNumerator) cyclePos -= cycleLengthNumerator;
+			val = (randomValues[cyclePos & (randomValues.length - 1)]) ? amplitude : -amplitude;
 		}
 
 		return val;

@@ -131,14 +131,19 @@ class GBPlugin extends EmulatorPlugin
 
 		for (i in 0 ... l)
 		{
-			e.data.writeFloat(gb.audio.buffer1.get(0));
-			e.data.writeFloat(gb.audio.buffer2.get(0));
+			e.data.writeFloat(gb.audio.buffer1.get(0) / 0xf);
+			e.data.writeFloat(gb.audio.buffer2.get(0) / 0xf);
 		}
 
 		for (i in l ... 0x800)
 		{
-			e.data.writeFloat(gb.audio.buffer1.pop());
-			e.data.writeFloat(gb.audio.buffer2.pop());
+			e.data.writeFloat(gb.audio.buffer1.pop() / 0xf);
+			e.data.writeFloat(gb.audio.buffer2.pop() / 0xf);
 		}
+	}
+
+	override public function setSpeed(speed:EmulationSpeed)
+	{
+		gb.audio.speedMultiplier = speed;
 	}
 }

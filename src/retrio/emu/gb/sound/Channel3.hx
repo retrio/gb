@@ -9,7 +9,7 @@ class Channel3 implements ISoundGenerator
 	public var length(default, set):Int = 0;
 	function set_length(l:Int)
 	{
-		lengthCounter = l;
+		lengthCounter = 256-l;
 		return length = l;
 	}
 	public var lengthCounter:Int = 0;
@@ -19,15 +19,18 @@ class Channel3 implements ISoundGenerator
 	public var frequency(default, set):Int = 0;
 	inline function set_frequency(f:Int)
 	{
-		var freq = Std.int(0x10000/(0x800-f));
-		cycleLength = Math.ceil(48*Audio.SAMPLE_RATE / freq);
-		sampleLength = Math.ceil(cycleLength / 32);
+		cycleLengthNumerator = Audio.NATIVE_SAMPLE_RATE * (0x800 - f);
+		cycleLengthDenominator = 0x10000;
+		sampleLength = Std.int(cycleLengthNumerator / 32);
 		return frequency = f;
 	}
 
-	var cycleLength:Int = 0;
-	var sampleLength:Int = 0;
-	var pos:Int = 0;
+	public var outputLevel:Int;
+
+	var cycleLengthNumerator:Int = 1;
+	var cycleLengthDenominator:Int = 1;
+	var cyclePos:Int = 0;
+	var sampleLength:Int = 1;
 
 	public function new()
 	{
@@ -38,11 +41,11 @@ class Channel3 implements ISoundGenerator
 
 	public inline function lengthClock():Void
 	{
-		if (!repeat && lengthCounter > 0)
+		if (lengthCounter > 0)
 		{
 			if (--lengthCounter == 0)
 			{
-				if (!repeat) enabled = false;
+				enabled = repeat;
 			}
 		}
 	}
@@ -53,20 +56,21 @@ class Channel3 implements ISoundGenerator
 		enabled = true;
 		repeat = true;
 		if (lengthCounter == 0) lengthCounter = 0x40;
-		pos = 0;
+		cyclePos = 0;
 	}
 
 	public inline function play():Int
 	{
-		pos = (pos + Audio.NATIVE_SAMPLE_RATIO) % cycleLength;
-
 		var val = 0;
-		if (enabled)
+		if (enabled && outputLevel > 0)
 		{
+			cyclePos += (cycleLengthDenominator * Audio.NATIVE_SAMPLE_RATIO);
+			if (cyclePos >= cycleLengthNumerator) cyclePos -= cycleLengthNumerator;
 			if (sampleLength != 0)
 			{
-				val = wavData[Std.int(pos / sampleLength) & 0x1f];
+				val = wavData[Std.int(cyclePos / sampleLength) & 0x1f];
 			}
+			if (outputLevel > 1) val >>= (outputLevel - 1);
 		}
 
 		return val;

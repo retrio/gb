@@ -22,7 +22,7 @@ class Palette
 		var r = (c & 0xff0000) >> 16;
 		var g = (c & 0xff00) >> 8;
 		var b = (c & 0xff);
-#if flash
+#if (flash || legacy)
 		// store colors as little-endian for flash.Memory
 		return (0xff) | ((Std.int(r) & 0xff) << 8) | ((Std.int(g) & 0xff) << 16) | ((Std.int(b) & 0xff) << 24);
 #else

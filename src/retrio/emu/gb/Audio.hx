@@ -8,11 +8,13 @@ import retrio.emu.gb.sound.*;
 @:build(retrio.macro.Optimizer.build())
 class Audio
 {
-	public static inline var SAMPLE_RATE:Int = 44100;// #if flash 44100 #else 48000 #end;
-	public static inline var SAMPLES_PER_FRAME:Int = Std.int(SAMPLE_RATE / 60);
-	public static inline var NATIVE_SAMPLE_RATIO:Int = 3;
-	static inline var BUFFER_LENGTH:Int = 0x2000;
-	static inline var CPU_SYNC_RATE:Float = (456*154) / SAMPLES_PER_FRAME;
+	// currently OpenFL on native, like Flash, does not support non-44100 sample rates
+	public static inline var SAMPLE_RATE:Int = 44100;//#if flash 44100 #else 48000 #end;
+	public static inline var NATIVE_SAMPLE_RATE:Int = (456*154*60);
+	public static inline var NATIVE_SAMPLE_RATIO:Int = #if flash 2 #else 2 #end;
+	static inline var BUFFER_LENGTH:Int = 0x10000;
+	static inline var CPU_SYNC_RATE:Float = NATIVE_SAMPLE_RATE / SAMPLE_RATE / NATIVE_SAMPLE_RATIO;
+	static inline var MAX_VOLUME:Int = 8;
 
 	public var cpu:CPU;
 	public var memory:Memory;
@@ -22,6 +24,14 @@ class Audio
 
 	public var bufferStart:Int;
 	public var bufferEnd:Int;
+
+	public var speedMultiplier(default, set):Float = 1;
+	function set_speedMultiplier(s:Float)
+	{
+		cycleSkip = Std.int(NATIVE_SAMPLE_RATIO * speedMultiplier);
+		return speedMultiplier = s;
+	}
+	var cycleSkip:Int = NATIVE_SAMPLE_RATIO;
 
 	var vol1:Int = 0;
 	var vol2:Int = 0;
@@ -37,7 +47,8 @@ class Audio
 	var channelsOn2:Vector<Bool> = new Vector(4);
 
 	var cycles:Int = 0;
-	var sampleCounter:Float = 0;
+	var sampleCounter:Int = 0;
+	var sampleSync:Int = 0;
 
 	// sample data for interpolation
 	var s1:Int = 0;
@@ -65,10 +76,186 @@ class Audio
 		this.memory = memory;
 	}
 
+	public inline function read(addr:Int):Int
+	{
+		switch (addr)
+		{
+			/*case 0xff10:
+				return ch1.sweepNumber |
+					(ch1.sweepDirection == 1 ? 0x80 : 0) |
+					(ch1.sweepTime << 4);
+
+			case 0xff11:
+				return (ch1.length) |
+					(ch1.duty << 6);
+
+			case 0xff12:
+				return (ch1.envelopeNumber) |
+					(ch1.envelopeDirection == -1 ? 0x80 : 0) |
+					(ch1.envelopeVolume << 4);
+
+			case 0xff13:
+				return ch1.frequency & 0xff;
+
+			case 0xff14:
+				return ((ch1.frequency & 0x700) >> 8) |
+					(ch1.repeat ? 0 : 0x40);
+
+			case 0xff16:
+				return (ch2.length) |
+					(ch2.duty << 6);
+
+			case 0xff17:
+				return (ch2.envelopeNumber) |
+					(ch2.envelopeDirection == -1 ? 0x80 : 0) |
+					(ch2.envelopeVolume << 4);
+
+			case 0xff18:
+				return ch2.frequency & 0xff;
+
+			case 0xff19:
+				return ((ch2.frequency & 0x700) >> 8) |
+					(ch2.repeat ? 0 : 0x40);*/
+
+			case 0xff24:
+				return (vol1 - 1) | ((vol2 - 1) << 4);
+
+			case 0xff25:
+				// TODO
+				return 0;
+
+			case 0xff26:
+				// TODO
+				return 0;
+
+			case 0xff30, 0xff31, 0xff32, 0xff33, 0xff34, 0xff35, 0xff36, 0xff37,
+					0xff38, 0xff39, 0xff3a, 0xff3b, 0xff3c, 0xff3d, 0xff3e, 0xff3f:
+				var a:Int = (addr - 0xff30) * 2;
+				return (ch3.wavData[a] << 4) | (ch3.wavData[a+1]);
+
+			default:
+				return 0;
+		}
+	}
+
+	public function write(addr:Int, value:Int):Void
+	{
+		catchUp();
+
+		switch (addr)
+		{
+			case 0xff10:
+				ch1.setSweep(value);
+
+			case 0xff11:
+				ch1.setDuty(value);
+
+			case 0xff12:
+				ch1.setEnvelope(value);
+
+			case 0xff13:
+				ch1.frequency = (ch1.frequency & 0x700) | value;
+
+			case 0xff14:
+				ch1.frequency = (ch1.frequency & 0xff) | ((value & 0x7) << 8);
+				ch1.repeat = !Util.getbit(value, 6);
+				if (ch1.repeat) ch1.enabled = true;
+				if (Util.getbit(value, 7))
+				{
+					ch1.reset();
+				}
+
+			case 0xff16:
+				ch2.setDuty(value);
+
+			case 0xff17:
+				ch2.setEnvelope(value);
+
+			case 0xff18:
+				ch2.frequency = (ch2.frequency & 0x700) | value;
+
+			case 0xff19:
+				ch2.frequency = (ch2.frequency & 0xff) | ((value & 0x7) << 8);
+				ch2.repeat = !Util.getbit(value, 6);
+				if (ch2.repeat) ch2.enabled = true;
+				if (Util.getbit(value, 7))
+				{
+					ch2.reset();
+				}
+
+			case 0xff1a:
+				ch3.enabled = Util.getbit(value, 7);
+
+			case 0xff1b:
+				ch3.length = value;
+
+			case 0xff1c:
+				ch3.outputLevel = value;
+
+			case 0xff1d:
+				ch3.frequency = (ch3.frequency & 0x700) | value;
+
+			case 0xff1e:
+				ch3.frequency = (ch3.frequency & 0xff) | ((value & 0x7) << 8);
+				ch3.repeat = !Util.getbit(value, 6);
+				if (ch3.repeat) ch3.enabled = true;
+				if (Util.getbit(value, 7))
+				{
+					ch3.reset();
+				}
+
+			case 0xff20:
+				ch4.length = value & 0x3f;
+
+			case 0xff21:
+				ch4.setEnvelope(value);
+
+			case 0xff22:
+				// TODO
+
+			case 0xff23:
+				ch4.repeat = !Util.getbit(value, 6);
+				if (ch4.repeat) ch4.enabled = true;
+				if (Util.getbit(value, 7))
+				{
+					ch4.reset();
+				}
+
+			case 0xff24:
+				vol1 = (value & 0x7) + 1;
+				vol2 = ((value >> 4) & 0x7) + 1;
+
+			case 0xff25:
+				channelsOn1[0] = Util.getbit(value, 0);
+				channelsOn1[1] = Util.getbit(value, 1);
+				channelsOn1[2] = Util.getbit(value, 2);
+				channelsOn1[3] = Util.getbit(value, 3);
+
+				channelsOn2[0] = Util.getbit(value, 4);
+				channelsOn2[1] = Util.getbit(value, 5);
+				channelsOn2[2] = Util.getbit(value, 6);
+				channelsOn2[3] = Util.getbit(value, 7);
+
+			case 0xff26:
+				soundEnabled = Util.getbit(value, 7);
+
+			case 0xff30, 0xff31, 0xff32, 0xff33, 0xff34, 0xff35, 0xff36, 0xff37,
+					0xff38, 0xff39, 0xff3a, 0xff3b, 0xff3c, 0xff3d, 0xff3e, 0xff3f:
+				var a:Int = (addr - 0xff30) * 2;
+				ch3.wavData[a] = (addr & 0xf0) >> 4;
+				ch3.wavData[a+1] = (addr & 0xf);
+
+			default: {}
+		}
+	}
+
 	public function catchUp()
 	{
 		while (cpu.apuCycles > 0)
 		{
+			/*--cpu.apuCycles;
+			runCycle();
+			generateSample();*/
 			var runTo = predict();
 			cpu.apuCycles -= runTo + 1;
 			for (i in 0 ... runTo) generateSample();
@@ -101,7 +288,7 @@ class Audio
 		if (ch2.enabled)
 		{
 			// length
-			if (!ch1.repeat)
+			if (!ch2.repeat)
 			{
 				next = (8 - cycles) + (8 * ch2.lengthCounter);
 				if (next < nextEvent) nextEvent = next;
@@ -113,7 +300,7 @@ class Audio
 		if (ch3.enabled)
 		{
 			// length
-			if (!ch1.repeat)
+			if (!ch3.repeat)
 			{
 				next = (8 - cycles) + (8 * ch3.lengthCounter);
 				if (next < nextEvent) nextEvent = next;
@@ -122,7 +309,7 @@ class Audio
 		if (ch4.enabled)
 		{
 			// length
-			if (!ch1.repeat)
+			if (!ch4.repeat)
 			{
 				next = (8 - cycles) + (8 * ch4.lengthCounter);
 				if (next < nextEvent) nextEvent = next;
@@ -178,8 +365,11 @@ class Audio
 	var _samples:Vector<Int> = new Vector(4);
 	inline function generateSample()
 	{
-		if (Std.int(++sampleCounter) % NATIVE_SAMPLE_RATIO == 0)
+		if (++sampleCounter >= cycleSkip)
 		{
+			sampleCounter -= cycleSkip;
+			sampleSync += SAMPLE_RATE * NATIVE_SAMPLE_RATIO;
+
 			if (soundEnabled)
 			{
 				getSoundOut1();
@@ -190,24 +380,24 @@ class Audio
 				s1 = s2 = 0;
 			}
 
-			if (CPU_SYNC_RATE - sampleCounter < 0)
+			if (sampleSync >= NATIVE_SAMPLE_RATE)
 			{
-				var t = sampleCounter - CPU_SYNC_RATE;
-				downsample1 += (s1*t/CPU_SYNC_RATE);
-				downsample2 += (s2*t/CPU_SYNC_RATE);
+				var t = (sampleSync - NATIVE_SAMPLE_RATE) / SAMPLE_RATE;
+				downsample1 += s1 * t;
+				downsample2 += s2 * t;
 
-				buffer1.push(downsample1);
-				buffer2.push(downsample2);
+				buffer1.push(downsample1 / CPU_SYNC_RATE / MAX_VOLUME);
+				buffer2.push(downsample2 / CPU_SYNC_RATE / MAX_VOLUME);
 
 				downsample1 = s1 * (1 - t);
 				downsample2 = s2 * (1 - t);
 
-				sampleCounter -= CPU_SYNC_RATE;
+				sampleSync -= NATIVE_SAMPLE_RATE;
 			}
 			else
 			{
-				downsample1 += (NATIVE_SAMPLE_RATIO*s1/CPU_SYNC_RATE);
-				downsample2 += (NATIVE_SAMPLE_RATIO*s2/CPU_SYNC_RATE);
+				downsample1 += s1;
+				downsample2 += s2;
 			}
 		}
 	}
@@ -217,15 +407,23 @@ class Audio
 		s1 = 0;
 
 		if (channelsOn1[0])
+		{
 			s1 += _samples[0] = ch1.play();
+		}
 		if (channelsOn1[1])
+		{
 			s1 += _samples[1] = ch2.play();
+		}
 		if (channelsOn1[2])
+		{
 			s1 += _samples[2] = ch3.play();
+		}
 		if (channelsOn1[3])
+		{
 			s1 += _samples[3] = ch4.play();
+		}
 
-		s1 = s1 >> (3 - vol1);
+		s1 *= vol1;
 	}
 
 	inline function getSoundOut2()
@@ -233,182 +431,22 @@ class Audio
 		s2 = 0;
 
 		if (channelsOn2[0])
+		{
 			s2 += channelsOn1[0] ? _samples[0] : ch1.play();
+		}
 		if (channelsOn2[1])
+		{
 			s2 += channelsOn1[1] ? _samples[1] : ch2.play();
+		}
 		if (channelsOn2[2])
+		{
 			s2 += channelsOn1[2] ? _samples[2] : ch3.play();
+		}
 		if (channelsOn2[3])
+		{
 			s2 += channelsOn1[3] ? _samples[3] : ch4.play();
-
-		s2 = s2 >> (3 - vol2);
-	}
-
-	public inline function read(addr:Int):Int
-	{
-		switch (addr)
-		{
-			/*case 0xff10:
-				return ch1.sweepNumber |
-					(ch1.sweepDirection == 1 ? 0x80 : 0) |
-					(ch1.sweepTime << 4);
-
-			case 0xff11:
-				return (ch1.length) |
-					(ch1.duty << 6);
-
-			case 0xff12:
-				return (ch1.envelopeNumber) |
-					(ch1.envelopeDirection == -1 ? 0x80 : 0) |
-					(ch1.envelopeVolume << 4);
-
-			case 0xff13:
-				return ch1.frequency & 0xff;
-
-			case 0xff14:
-				return ((ch1.frequency & 0x700) >> 8) |
-					(ch1.repeat ? 0 : 0x40);
-
-			case 0xff16:
-				return (ch2.length) |
-					(ch2.duty << 6);
-
-			case 0xff17:
-				return (ch2.envelopeNumber) |
-					(ch2.envelopeDirection == -1 ? 0x80 : 0) |
-					(ch2.envelopeVolume << 4);
-
-			case 0xff18:
-				return ch2.frequency & 0xff;
-
-			case 0xff19:
-				return ((ch2.frequency & 0x700) >> 8) |
-					(ch2.repeat ? 0 : 0x40);*/
-
-			case 0xff24:
-				return vol1 | (vol2 << 4);
-
-			case 0xff25:
-				// TODO
-				return 0;
-
-			case 0xff26:
-				// TODO
-				return 0;
-
-			case 0xff30, 0xff31, 0xff32, 0xff33, 0xff34, 0xff35, 0xff36, 0xff37,
-					0xff38, 0xff39, 0xff3a, 0xff3b, 0xff3c, 0xff3d, 0xff3e, 0xff3f:
-				var a:Int = (addr - 0xff30) * 2;
-				return (ch3.wavData[a] << 4) | (ch3.wavData[a+1]);
-
-			default:
-				return 0;
 		}
-	}
 
-	public inline function write(addr:Int, value:Int):Void
-	{
-		catchUp();
-
-		switch (addr)
-		{
-			case 0xff10:
-				ch1.setSweep(value);
-
-			case 0xff11:
-				ch1.setDuty(value);
-
-			case 0xff12:
-				ch1.setEnvelope(value);
-
-			case 0xff13:
-				ch1.frequency = (ch1.frequency & 0x700) | value;
-
-			case 0xff14:
-				ch1.frequency = (ch1.frequency & 0xff) | ((value & 0x7) << 8);
-				ch1.repeat = !Util.getbit(value, 6);
-				if (Util.getbit(value, 7))
-				{
-					ch1.reset();
-				}
-
-			case 0xff16:
-				ch2.setDuty(value);
-
-			case 0xff17:
-				ch2.setEnvelope(value);
-
-			case 0xff18:
-				ch2.frequency = (ch2.frequency & 0x700) | value;
-
-			case 0xff19:
-				ch2.frequency = (ch2.frequency & 0xff) | ((value & 0x7) << 8);
-				ch2.repeat = !Util.getbit(value, 6);
-				if (Util.getbit(value, 7))
-				{
-					ch2.reset();
-				}
-
-			case 0xff1a:
-				ch3.enabled = Util.getbit(value, 7);
-
-			case 0xff1b:
-				ch3.length = value;
-
-			case 0xff1c: // TODO
-
-			case 0xff1d:
-				ch3.frequency = (ch3.frequency & 0x700) | value;
-
-			case 0xff1e:
-				ch3.frequency = (ch3.frequency & 0xff) | ((value & 0x7) << 8);
-				ch3.repeat = !Util.getbit(value, 6);
-				if (Util.getbit(value, 7))
-				{
-					ch3.reset();
-				}
-
-			case 0xff20:
-				ch4.length = value & 0x3f;
-
-			case 0xff21:
-				ch4.setEnvelope(value);
-
-			case 0xff22:
-				// TODO
-
-			case 0xff23:
-				ch4.repeat = !Util.getbit(value, 6);
-				if (Util.getbit(value, 7))
-				{
-					ch4.reset();
-				}
-
-			case 0xff24:
-				vol1 = value & 0x7;
-				vol2 = (value >> 4) & 0x7;
-
-			case 0xff25:
-				channelsOn1[0] = Util.getbit(value, 0);
-				channelsOn1[1] = Util.getbit(value, 1);
-				channelsOn1[2] = Util.getbit(value, 2);
-				channelsOn1[3] = Util.getbit(value, 3);
-
-				channelsOn2[0] = Util.getbit(value, 4);
-				channelsOn2[1] = Util.getbit(value, 5);
-				channelsOn2[2] = Util.getbit(value, 6);
-				channelsOn2[3] = Util.getbit(value, 7);
-
-			case 0xff26:
-				soundEnabled = Util.getbit(value, 7);
-
-			case 0xff30, 0xff31, 0xff32, 0xff33, 0xff34, 0xff35, 0xff36, 0xff37,
-					0xff38, 0xff39, 0xff3a, 0xff3b, 0xff3c, 0xff3d, 0xff3e, 0xff3f:
-				var a:Int = (addr - 0xff30) * 2;
-				ch3.wavData[a] = (addr & 0xf0) >> 4;
-				ch3.wavData[a+1] = (addr & 0xf);
-
-			default: {}
-		}
+		s2 *= vol2;
 	}
 }

@@ -45,17 +45,17 @@ class Channel1 implements ISoundGenerator
 	public var frequency(default, set):Int = 0;
 	inline function set_frequency(f:Int)
 	{
-		var freq = Std.int(0x10000/(0x800-(f==0x800 ? 0 : f)));
-		cycleLength = Math.ceil(48*Audio.SAMPLE_RATE / freq);
-		dutyLength = Math.ceil(cycleLength / 8);
+		cycleLengthNumerator = Audio.NATIVE_SAMPLE_RATE * (0x800 - f);
+		cycleLengthDenominator = 0x20000;
+		dutyLength = Std.int(cycleLengthNumerator / 8);
 		return frequency = f;
 	}
 
-	var cycleLength:Int = 0;
-	var dutyLength:Int = 0;
+	var cycleLengthNumerator:Int = 1;
+	var cycleLengthDenominator:Int = 1;
+	var cyclePos:Int = 0;
+	var dutyLength:Int = 1;
 	var amplitude:Int = 0;
-
-	var pos:Int = 0;
 
 	public function new() {}
 
@@ -90,16 +90,16 @@ class Channel1 implements ISoundGenerator
 		enabled = true;
 		repeat = true;
 		if (lengthCounter == 0) lengthCounter = 0x40;
-		pos = 0;
+		cyclePos = 0;
 	}
 
 	public inline function lengthClock():Void
 	{
-		if (!repeat && lengthCounter > 0)
+		if (lengthCounter > 0)
 		{
 			if (--lengthCounter == 0)
 			{
-				enabled = false;
+				enabled = repeat;
 			}
 		}
 	}
@@ -112,14 +112,14 @@ class Channel1 implements ISoundGenerator
 			{
 				if (sweepDecrease)
 				{
-					frequency = (frequency - (frequency >> sweepDiv));
+					frequency = (frequency - (frequency >> sweepDiv)) & 0x7ff;
 				}
 				else
 				{
-					frequency = frequency + (frequency >> sweepDiv);
+					frequency = (frequency + (frequency >> sweepDiv)) & 0x7ff;
 				}
-				sweepCounter = sweepTime;
 			}
+			sweepCounter = sweepTime;
 		}
 	}
 
@@ -144,12 +144,12 @@ class Channel1 implements ISoundGenerator
 
 	public inline function play():Int
 	{
-		pos = (pos + Audio.NATIVE_SAMPLE_RATIO) % cycleLength;
-
 		var val = 0;
 		if (enabled)
 		{
-			val = (cachedDuty[Std.int(pos / dutyLength) & 0x7]) ? amplitude : -amplitude;
+			cyclePos += (cycleLengthDenominator * Audio.NATIVE_SAMPLE_RATIO);
+			if (cyclePos >= cycleLengthNumerator) cyclePos -= cycleLengthNumerator;
+			val = (cachedDuty[Std.int(cyclePos / dutyLength) & 0x7]) ? amplitude : -amplitude;
 		}
 
 		return val;
