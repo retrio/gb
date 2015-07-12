@@ -60,7 +60,9 @@ class GB implements IEmulator implements IState
 
 	public function frame()
 	{
+		audio.newFrame();
 		cpu.runFrame();
+
 		if (memory.sramDirty)
 		{
 			if (_saveCounter < SRAM_SAVE_FRAMES)

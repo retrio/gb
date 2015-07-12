@@ -6,18 +6,23 @@ import haxe.ds.Vector;
 class Channel1 implements ISoundGenerator
 {
 	static var dutyLookup:Vector<Vector<Bool>> = Vector.fromArrayCopy([
-		Vector.fromArrayCopy([	false,	false,	false,	false,	false,	false,	false,	true,	]),
-		Vector.fromArrayCopy([	true,	false,	false,	false,	false,	false,	false,	true,	]),
-		Vector.fromArrayCopy([	true,	false,	false,	false,	false,	true,	true,	true,	]),
-		Vector.fromArrayCopy([	false,	true,	true,	true,	true,	true,	true,	false,	]),
+		Vector.fromArrayCopy([	true,	false,	false,	false,	false,	false,	false,	false,	]),
+		Vector.fromArrayCopy([	false,	false,	false,	false,	true,	true,	false,	false,	]),
+		Vector.fromArrayCopy([	true,	true,	true,	true,	false,	false,	false,	false,	]),
+		Vector.fromArrayCopy([	true,	true,	true,	true,	true,	true,	false,	false,	]),
 	]);
 
-	public var enabled:Bool = false;
-
-	public var sweepDecrease:Bool = false;
-	public var sweepDiv:Int = 0;
-	public var sweepTime:Int = 0;
-	public var sweepCounter:Int = 0;
+	var _enabled:Bool = false;
+	public var enabled(get, set):Bool;
+	inline function get_enabled()
+	{
+		return _enabled && dac;
+	}
+	inline function set_enabled(b:Bool)
+	{
+		return _enabled = b;
+	}
+	public var dac:Bool = false;
 
 	public var length:Int = 0;
 	inline function set_length(l:Int)
@@ -36,8 +41,13 @@ class Channel1 implements ISoundGenerator
 	}
 	var cachedDuty:Vector<Bool> = dutyLookup[0];
 
+	public var sweepDecrease:Bool = false;
+	public var sweepDiv:Int = 0;
+	public var sweepTime:Int = 0;
+	public var sweepCounter:Int = 0;
+
 	public var envelopeType:Bool = false;
-	public var envelopeDiv:Int = 0;
+	public var envelopeTime:Int = 0;
 	public var envelopeVolume:Int = 0;
 	public var envelopeCounter:Int = 0;
 
@@ -49,6 +59,11 @@ class Channel1 implements ISoundGenerator
 		cycleLengthDenominator = 0x20000;
 		dutyLength = Std.int(cycleLengthNumerator / 8);
 		return frequency = f;
+	}
+	public var baseFrequency(default, set):Int = 0;
+	inline function set_baseFrequency(f:Int)
+	{
+		return baseFrequency = frequency = f;
 	}
 
 	var cycleLengthNumerator:Int = 1;
@@ -67,30 +82,48 @@ class Channel1 implements ISoundGenerator
 		sweepCounter = sweepTime;
 	}
 
+	public var sweepRegister(get, never):Int;
+	inline function get_sweepRegister()
+	{
+		return (sweepDiv) | (sweepDecrease ? 0x8 : 0) | (sweepTime << 4);
+	}
+
 	public function setDuty(value:Int):Void
 	{
 		length = value & 0x3f;
 		duty = (value & 0xc0) >> 6;
 	}
 
+	public var dutyRegister(get, never):Int;
+	inline function get_dutyRegister()
+	{
+		return (length) | (duty << 6);
+	}
+
 	public function setEnvelope(value:Int):Void
 	{
-		envelopeDiv = value & 0x7;
+		envelopeTime = value & 0x7;
 		envelopeType = Util.getbit(value, 3);
 		envelopeVolume = (value & 0xf0) >> 4;
-
 		amplitude = envelopeVolume;
+		dac = value & 0xf8 > 0;
+	}
+
+	public var envelopeRegister(get, never):Int;
+	inline function get_envelopeRegister()
+	{
+		return (envelopeTime) | (envelopeType ? 0x8 : 0) | (envelopeVolume << 4);
 	}
 
 	public function reset():Void
 	{
 		amplitude = envelopeVolume;
+		envelopeCounter = envelopeTime;
 		sweepCounter = sweepTime;
-		set_length(length);
-		enabled = true;
-		repeat = true;
+		enabled = repeat = true;
 		if (lengthCounter == 0) lengthCounter = 0x40;
 		cyclePos = 0;
+		frequency = baseFrequency;
 	}
 
 	public inline function lengthClock():Void
@@ -125,7 +158,7 @@ class Channel1 implements ISoundGenerator
 
 	public inline function envelopeClock():Void
 	{
-		if (envelopeDiv > 0)
+		if (envelopeTime > 0)
 		{
 			if (envelopeCounter-- == 0)
 			{
@@ -137,7 +170,7 @@ class Channel1 implements ISoundGenerator
 				{
 					if (amplitude > 0) --amplitude;
 				}
-				envelopeCounter = envelopeDiv;
+				envelopeCounter = envelopeTime;
 			}
 		}
 	}

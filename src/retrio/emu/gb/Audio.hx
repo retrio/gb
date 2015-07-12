@@ -2,6 +2,8 @@ package retrio.emu.gb;
 
 import haxe.io.Bytes;
 import haxe.ds.Vector;
+import retrio.audio.SoundBuffer;
+import retrio.audio.LowPassFilter;
 import retrio.emu.gb.sound.*;
 
 
@@ -11,19 +13,19 @@ class Audio
 	// currently OpenFL on native, like Flash, does not support non-44100 sample rates
 	public static inline var SAMPLE_RATE:Int = 44100;//#if flash 44100 #else 48000 #end;
 	public static inline var NATIVE_SAMPLE_RATE:Int = (456*154*60);
-	public static inline var NATIVE_SAMPLE_RATIO:Int = #if flash 2 #else 2 #end;
-	static inline var BUFFER_LENGTH:Int = 0x10000;
+	public static inline var NATIVE_SAMPLE_RATIO:Int = 4;
+	static inline var BUFFER_LENGTH:Int = 0x8000;
 	static inline var CPU_SYNC_RATE:Float = NATIVE_SAMPLE_RATE / SAMPLE_RATE / NATIVE_SAMPLE_RATIO;
 	static inline var MAX_VOLUME:Int = 8;
+	// TODO: this shouldn't be defined here
+	static inline var FRAME_RATE = 60;
+	static inline var FILTER_ORDER = #if flash 64 #else 1024 #end;
 
 	public var cpu:CPU;
 	public var memory:Memory;
 
-	public var buffer1:SoundBuffer;
-	public var buffer2:SoundBuffer;
-
-	public var bufferStart:Int;
-	public var bufferEnd:Int;
+	public var buffer1:SoundBuffer;		// right output
+	public var buffer2:SoundBuffer;		// left output
 
 	public var speedMultiplier(default, set):Float = 1;
 	function set_speedMultiplier(s:Float)
@@ -36,38 +38,45 @@ class Audio
 	var vol1:Int = 0;
 	var vol2:Int = 0;
 
-	var soundEnabled:Bool = true;
+	var soundEnabled:Bool = false;
 
 	var ch1:Channel1;
 	var ch2:Channel1;	// channel 2 is channel 1 without sweep
 	var ch3:Channel3;
 	var ch4:Channel4;
-	var channels:Vector<ISoundGenerator> = new Vector(4);
 	var channelsOn1:Vector<Bool> = new Vector(4);
 	var channelsOn2:Vector<Bool> = new Vector(4);
 
 	var cycles:Int = 0;
 	var sampleCounter:Int = 0;
 	var sampleSync:Int = 0;
+	var samplesThisFrame:Int = 0;
 
 	// sample data for interpolation
-	var s1:Int = 0;
-	var s2:Int = 0;
-	var downsample1:Float = 0;
-	var downsample2:Float = 0;
+	var s1:Float = 0;
+	var s2:Float = 0;
+	var s1prev:Float = 0;
+	var s2prev:Float = 0;
+	var t:Null<Float> = null;
+
+	var filter1:LowPassFilter;
+	var filter2:LowPassFilter;
 
 	public function new()
 	{
 		buffer1 = new SoundBuffer(BUFFER_LENGTH);
 		buffer2 = new SoundBuffer(BUFFER_LENGTH);
 
-		channels[0] = ch1 = new Channel1();
-		channels[1] = ch2 = new Channel1();
-		channels[2] = ch3 = new Channel3();
-		channels[3] = ch4 = new Channel4();
+		ch1 = new Channel1();
+		ch2 = new Channel1();
+		ch3 = new Channel3();
+		ch4 = new Channel4();
 
 		for (i in 0 ... channelsOn1.length) channelsOn1[i] = false;
 		for (i in 0 ... channelsOn2.length) channelsOn2[i] = false;
+
+		filter1 = new LowPassFilter(Std.int(NATIVE_SAMPLE_RATE / NATIVE_SAMPLE_RATIO), SAMPLE_RATE, FILTER_ORDER);
+		filter2 = new LowPassFilter(Std.int(NATIVE_SAMPLE_RATE / NATIVE_SAMPLE_RATIO), SAMPLE_RATE, FILTER_ORDER);
 	}
 
 	public function init(cpu:CPU, memory:Memory)
@@ -76,23 +85,23 @@ class Audio
 		this.memory = memory;
 	}
 
+	public function newFrame()
+	{
+		samplesThisFrame -= SAMPLE_RATE;
+	}
+
 	public inline function read(addr:Int):Int
 	{
 		switch (addr)
 		{
-			/*case 0xff10:
-				return ch1.sweepNumber |
-					(ch1.sweepDirection == 1 ? 0x80 : 0) |
-					(ch1.sweepTime << 4);
+			case 0xff10:
+				return ch1.sweepRegister;
 
 			case 0xff11:
-				return (ch1.length) |
-					(ch1.duty << 6);
+				return ch1.dutyRegister;
 
 			case 0xff12:
-				return (ch1.envelopeNumber) |
-					(ch1.envelopeDirection == -1 ? 0x80 : 0) |
-					(ch1.envelopeVolume << 4);
+				return ch1.envelopeRegister;
 
 			case 0xff13:
 				return ch1.frequency & 0xff;
@@ -102,31 +111,37 @@ class Audio
 					(ch1.repeat ? 0 : 0x40);
 
 			case 0xff16:
-				return (ch2.length) |
-					(ch2.duty << 6);
+				return ch2.dutyRegister;
 
 			case 0xff17:
-				return (ch2.envelopeNumber) |
-					(ch2.envelopeDirection == -1 ? 0x80 : 0) |
-					(ch2.envelopeVolume << 4);
+				return ch2.envelopeRegister;
 
 			case 0xff18:
 				return ch2.frequency & 0xff;
 
 			case 0xff19:
 				return ((ch2.frequency & 0x700) >> 8) |
-					(ch2.repeat ? 0 : 0x40);*/
+					(ch2.repeat ? 0 : 0x40);
 
 			case 0xff24:
 				return (vol1 - 1) | ((vol2 - 1) << 4);
 
 			case 0xff25:
-				// TODO
-				return 0;
+				return (channelsOn1[0] ? 0x1 : 0) |
+					(channelsOn1[1] ? 0x2 : 0) |
+					(channelsOn1[2] ? 0x4 : 0) |
+					(channelsOn1[3] ? 0x8 : 0) |
+					(channelsOn2[0] ? 0x10 : 0) |
+					(channelsOn2[1] ? 0x20 : 0) |
+					(channelsOn2[2] ? 0x40 : 0) |
+					(channelsOn2[3] ? 0x80 : 0);
 
 			case 0xff26:
-				// TODO
-				return 0;
+				return (ch1.enabled ? 0x1 : 0) |
+					(ch2.enabled ? 0x2 : 0) |
+					(ch3.enabled ? 0x4 : 0) |
+					(ch4.enabled ? 0x8 : 0) |
+					(soundEnabled ? 0x80 : 0);
 
 			case 0xff30, 0xff31, 0xff32, 0xff33, 0xff34, 0xff35, 0xff36, 0xff37,
 					0xff38, 0xff39, 0xff3a, 0xff3b, 0xff3c, 0xff3d, 0xff3e, 0xff3f:
@@ -154,10 +169,10 @@ class Audio
 				ch1.setEnvelope(value);
 
 			case 0xff13:
-				ch1.frequency = (ch1.frequency & 0x700) | value;
+				ch1.baseFrequency = (ch1.frequency & 0x700) | value;
 
 			case 0xff14:
-				ch1.frequency = (ch1.frequency & 0xff) | ((value & 0x7) << 8);
+				ch1.baseFrequency = (ch1.frequency & 0xff) | ((value & 0x7) << 8);
 				ch1.repeat = !Util.getbit(value, 6);
 				if (ch1.repeat) ch1.enabled = true;
 				if (Util.getbit(value, 7))
@@ -172,10 +187,10 @@ class Audio
 				ch2.setEnvelope(value);
 
 			case 0xff18:
-				ch2.frequency = (ch2.frequency & 0x700) | value;
+				ch2.baseFrequency = (ch2.baseFrequency & 0x700) | value;
 
 			case 0xff19:
-				ch2.frequency = (ch2.frequency & 0xff) | ((value & 0x7) << 8);
+				ch2.baseFrequency = (ch2.baseFrequency & 0xff) | ((value & 0x7) << 8);
 				ch2.repeat = !Util.getbit(value, 6);
 				if (ch2.repeat) ch2.enabled = true;
 				if (Util.getbit(value, 7))
@@ -190,7 +205,7 @@ class Audio
 				ch3.length = value;
 
 			case 0xff1c:
-				ch3.outputLevel = value;
+				ch3.outputLevel = (value & 0x30) >> 5;
 
 			case 0xff1d:
 				ch3.frequency = (ch3.frequency & 0x700) | value;
@@ -226,15 +241,18 @@ class Audio
 				vol2 = ((value >> 4) & 0x7) + 1;
 
 			case 0xff25:
-				channelsOn1[0] = Util.getbit(value, 0);
-				channelsOn1[1] = Util.getbit(value, 1);
-				channelsOn1[2] = Util.getbit(value, 2);
-				channelsOn1[3] = Util.getbit(value, 3);
+				if (soundEnabled)
+				{
+					channelsOn1[0] = Util.getbit(value, 0);
+					channelsOn1[1] = Util.getbit(value, 1);
+					channelsOn1[2] = Util.getbit(value, 2);
+					channelsOn1[3] = Util.getbit(value, 3);
 
-				channelsOn2[0] = Util.getbit(value, 4);
-				channelsOn2[1] = Util.getbit(value, 5);
-				channelsOn2[2] = Util.getbit(value, 6);
-				channelsOn2[3] = Util.getbit(value, 7);
+					channelsOn2[0] = Util.getbit(value, 4);
+					channelsOn2[1] = Util.getbit(value, 5);
+					channelsOn2[2] = Util.getbit(value, 6);
+					channelsOn2[3] = Util.getbit(value, 7);
+				}
 
 			case 0xff26:
 				soundEnabled = Util.getbit(value, 7);
@@ -242,8 +260,8 @@ class Audio
 			case 0xff30, 0xff31, 0xff32, 0xff33, 0xff34, 0xff35, 0xff36, 0xff37,
 					0xff38, 0xff39, 0xff3a, 0xff3b, 0xff3c, 0xff3d, 0xff3e, 0xff3f:
 				var a:Int = (addr - 0xff30) * 2;
-				ch3.wavData[a] = (addr & 0xf0) >> 4;
-				ch3.wavData[a+1] = (addr & 0xf);
+				ch3.wavData[a] = (value & 0xf0) >> 4;
+				ch3.wavData[a+1] = (value & 0xf);
 
 			default: {}
 		}
@@ -257,11 +275,9 @@ class Audio
 			runCycle();
 			generateSample();*/
 			var runTo = predict();
-			cpu.apuCycles -= runTo + 1;
+			cpu.apuCycles -= runTo;
 			for (i in 0 ... runTo) generateSample();
 			for (i in 0 ... runTo) runCycle();
-			generateSample();
-			runCycle();
 		}
 	}
 
@@ -270,14 +286,14 @@ class Audio
 		var nextEvent:Int = Std.int(cpu.apuCycles - 1);
 		var next:Int;
 
-		if (ch1.enabled)
+		if (ch1.lengthCounter > 0 && !ch1.repeat)
 		{
 			// length
-			if (!ch1.repeat)
-			{
-				next = (8 - cycles) + (8 * ch1.lengthCounter);
-				if (next < nextEvent) nextEvent = next;
-			}
+			next = (8 - cycles) + (8 * ch1.lengthCounter);
+			if (next < nextEvent) nextEvent = next;
+		}
+		if (ch1.enabled)
+		{
 			// sweep
 			next = (cycles > 2 ? (10 - cycles) : (2 - cycles)) + (8 * ch1.sweepCounter);
 			if (next < nextEvent) nextEvent = next;
@@ -285,41 +301,40 @@ class Audio
 			next = (cycles > 4 ? (12 - cycles) : (4 - cycles)) + (8 * ch1.envelopeCounter);
 			if (next < nextEvent) nextEvent = next;
 		}
-		if (ch2.enabled)
+
+		if (ch2.lengthCounter > 0 && !ch2.repeat)
 		{
 			// length
-			if (!ch2.repeat)
-			{
-				next = (8 - cycles) + (8 * ch2.lengthCounter);
-				if (next < nextEvent) nextEvent = next;
-			}
+			next = (8 - cycles) + (8 * ch2.lengthCounter);
+			if (next < nextEvent) nextEvent = next;
+		}
+		if (ch2.enabled)
+		{
 			// envelope
 			next = (cycles > 4 ? (12 - cycles) : (4 - cycles)) + (8 * ch2.envelopeCounter);
 			if (next < nextEvent) nextEvent = next;
 		}
-		if (ch3.enabled)
+
+		if (ch3.enabled && !ch3.repeat)
+		{
+			next = (8 - cycles) + (8 * ch3.lengthCounter);
+			if (next < nextEvent) nextEvent = next;
+		}
+
+		if (ch4.lengthCounter > 0 && !ch4.repeat)
 		{
 			// length
-			if (!ch3.repeat)
-			{
-				next = (8 - cycles) + (8 * ch3.lengthCounter);
-				if (next < nextEvent) nextEvent = next;
-			}
+			next = (8 - cycles) + (8 * ch4.lengthCounter);
+			if (next < nextEvent) nextEvent = next;
 		}
 		if (ch4.enabled)
 		{
-			// length
-			if (!ch4.repeat)
-			{
-				next = (8 - cycles) + (8 * ch4.lengthCounter);
-				if (next < nextEvent) nextEvent = next;
-			}
 			// envelope
 			next = (cycles > 4 ? (12 - cycles) : (4 - cycles)) + (8 * ch4.envelopeCounter);
 			if (next < nextEvent) nextEvent = next;
 		}
 
-		return nextEvent < 0 ? 0 : nextEvent;
+		return (nextEvent < 0 ? 0 : nextEvent) + 1;
 	}
 
 	inline function runCycle()
@@ -380,24 +395,33 @@ class Audio
 				s1 = s2 = 0;
 			}
 
-			if (sampleSync >= NATIVE_SAMPLE_RATE)
+			filter1.addSample(s1);
+			filter2.addSample(s2);
+
+			if (NATIVE_SAMPLE_RATE - sampleSync < SAMPLE_RATE * NATIVE_SAMPLE_RATIO)
 			{
-				var t = (sampleSync - NATIVE_SAMPLE_RATE) / SAMPLE_RATE;
-				downsample1 += s1 * t;
-				downsample2 += s2 * t;
+				if (samplesThisFrame < SAMPLE_RATE)
+				{
+					if (t == null)
+					{
+						s1prev = filter1.getSample();
+						s2prev = filter2.getSample();
+						t = (NATIVE_SAMPLE_RATE - sampleSync) / (SAMPLE_RATE * NATIVE_SAMPLE_RATIO);
+					}
+					else
+					{
+						samplesThisFrame += FRAME_RATE;
 
-				buffer1.push(downsample1 / CPU_SYNC_RATE / MAX_VOLUME);
-				buffer2.push(downsample2 / CPU_SYNC_RATE / MAX_VOLUME);
+						buffer1.push(Util.lerp(s1prev, filter1.getSample(), t) / MAX_VOLUME);
+						buffer2.push(Util.lerp(s2prev, filter2.getSample(), t) / MAX_VOLUME);
 
-				downsample1 = s1 * (1 - t);
-				downsample2 = s2 * (1 - t);
-
-				sampleSync -= NATIVE_SAMPLE_RATE;
-			}
-			else
-			{
-				downsample1 += s1;
-				downsample2 += s2;
+						sampleSync -= NATIVE_SAMPLE_RATE;
+					}
+				}
+				else
+				{
+					sampleSync -= NATIVE_SAMPLE_RATE;
+				}
 			}
 		}
 	}

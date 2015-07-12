@@ -32,6 +32,9 @@ class GBPlugin extends EmulatorPlugin
 	var pixels:ByteArray = new ByteArray();
 	var frameCount = 0;
 	var r = new Rectangle(0, 0, GB.WIDTH, GB.HEIGHT);
+#if encode
+	var encoder = new retrio.WavEncoder();
+#end
 
 	public function new()
 	{
@@ -118,28 +121,60 @@ class GBPlugin extends EmulatorPlugin
 
 	override public function capture()
 	{
+#if encode
+		var outFile = sys.io.File.write("out.wav", true);
+		encoder.encode(outFile);
+#end
 		var capture = new BitmapData(bmpData.width, bmpData.height);
 		capture.copyPixels(bmpData, capture.rect, new flash.geom.Point());
 		return capture;
 	}
 
+	var _buffering:Bool = true;
 	override public function getSamples(e:Dynamic)
 	{
 		gb.audio.catchUp();
 
-		var l = Std.int(Math.max(0, 0x800 - gb.audio.buffer1.length));
+#if encode
+		while (gb.audio.buffer1.length > 0)
+		{
+			encoder.writeSample(Util.clamp(gb.audio.buffer2.pop(), -0xf, 0xf) / 0xf);
+			encoder.writeSample(Util.clamp(gb.audio.buffer1.pop(), -0xf, 0xf) / 0xf);
+		}
+
+		for (i in 0 ... 0x800)
+		{
+			e.data.writeFloat(0);
+			e.data.writeFloat(0);
+		}
+#else
+		var l:Int;
+		if (_buffering)
+		{
+			l = Std.int(Math.max(0, 0x1000 - gb.audio.buffer1.length));
+			if (l <= 0) _buffering = false;
+		}
+		else
+		{
+			// not enough samples; buffer until more arrive
+			l = Std.int(Math.max(0, 0x800 - gb.audio.buffer1.length));
+			if (l > 0)
+			{
+				_buffering = true;
+			}
+		}
 
 		for (i in 0 ... l)
 		{
-			e.data.writeFloat(gb.audio.buffer1.get(0) / 0xf);
-			e.data.writeFloat(gb.audio.buffer2.get(0) / 0xf);
+			e.data.writeDouble(0);
 		}
 
 		for (i in l ... 0x800)
 		{
-			e.data.writeFloat(gb.audio.buffer1.pop() / 0xf);
-			e.data.writeFloat(gb.audio.buffer2.pop() / 0xf);
+			e.data.writeFloat(Util.clamp(gb.audio.buffer2.pop(), -0xf, 0xf) / 0xf);
+			e.data.writeFloat(Util.clamp(gb.audio.buffer1.pop(), -0xf, 0xf) / 0xf);
 		}
+#end
 	}
 
 	override public function setSpeed(speed:EmulationSpeed)

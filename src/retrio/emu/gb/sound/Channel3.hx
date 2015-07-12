@@ -3,13 +3,24 @@ package retrio.emu.gb.sound;
 
 class Channel3 implements ISoundGenerator
 {
-	public var enabled:Bool = false;
+	var _enabled:Bool = false;
+	public var enabled(get, set):Bool;
+	inline function get_enabled()
+	{
+		return _enabled && dac;
+	}
+	inline function set_enabled(b:Bool)
+	{
+		return _enabled = b;
+	}
+	public var dac:Bool = false;
 
 	public var repeat:Bool = true;
 	public var length(default, set):Int = 0;
 	function set_length(l:Int)
 	{
-		lengthCounter = 256-l;
+		lengthCounter = 0x100-l;
+		enabled = true;
 		return length = l;
 	}
 	public var lengthCounter:Int = 0;
@@ -52,24 +63,22 @@ class Channel3 implements ISoundGenerator
 
 	public function reset():Void
 	{
-		set_length(length);
-		enabled = true;
-		repeat = true;
-		if (lengthCounter == 0) lengthCounter = 0x40;
+		enabled = repeat = true;
+		if (lengthCounter == 0) lengthCounter = 0x100;
 		cyclePos = 0;
 	}
 
 	public inline function play():Int
 	{
 		var val = 0;
-		if (enabled && outputLevel > 0)
+		if (outputLevel > 0)
 		{
 			cyclePos += (cycleLengthDenominator * Audio.NATIVE_SAMPLE_RATIO);
 			if (cyclePos >= cycleLengthNumerator) cyclePos -= cycleLengthNumerator;
-			if (sampleLength != 0)
-			{
-				val = wavData[Std.int(cyclePos / sampleLength) & 0x1f];
-			}
+			var val1 = wavData[Math.floor(cyclePos / sampleLength) & 0x1f];
+			var val2 = wavData[Math.ceil(cyclePos / sampleLength) & 0x1f];
+			var t = (cyclePos / sampleLength) % 1;
+			val = Std.int(Math.round(Util.lerp(val1, val2, t)));
 			if (outputLevel > 1) val >>= (outputLevel - 1);
 		}
 

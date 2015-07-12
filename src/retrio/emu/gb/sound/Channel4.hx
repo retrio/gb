@@ -7,7 +7,18 @@ class Channel4 implements ISoundGenerator
 {
 	static var randomValues:Vector<Bool>;
 
-	public var enabled:Bool = false;
+	var _enabled:Bool = false;
+	public var enabled(get, set):Bool;
+	inline function get_enabled()
+	{
+		return _enabled && dac;
+	}
+	inline function set_enabled(b:Bool)
+	{
+		return _enabled = b;
+	}
+	public var dac:Bool = false;
+
 	public var repeat:Bool = true;
 	public var length(default, set):Int = 0;
 	function set_length(l:Int)
@@ -24,9 +35,14 @@ class Channel4 implements ISoundGenerator
 		cycleLengthDenominator = 0x20000;
 		return frequency = f;
 	}
+	public var baseFrequency(default, set):Int = 0;
+	inline function set_baseFrequency(f:Int)
+	{
+		return baseFrequency = frequency = f;
+	}
 
 	public var envelopeType:Bool = false;
-	public var envelopeDiv:Int = 0;
+	public var envelopeTime:Int = 0;
 	public var envelopeVolume:Int = 0;
 	public var envelopeCounter:Int = 0;
 
@@ -46,11 +62,11 @@ class Channel4 implements ISoundGenerator
 
 	public function setEnvelope(value:Int):Void
 	{
-		envelopeDiv = value & 0x7;
+		envelopeTime = value & 0x7;
 		envelopeType = Util.getbit(value, 3);
 		envelopeVolume = (value & 0xf0) >> 4;
-
 		amplitude = envelopeVolume;
+		dac = value & 0xf8 > 0;
 	}
 
 	public function reset():Void
@@ -61,6 +77,7 @@ class Channel4 implements ISoundGenerator
 		repeat = true;
 		if (lengthCounter == 0) lengthCounter = 0x40;
 		cyclePos = 0;
+		frequency = baseFrequency;
 	}
 
 	public inline function lengthClock():Void
@@ -76,7 +93,7 @@ class Channel4 implements ISoundGenerator
 
 	public inline function envelopeClock():Void
 	{
-		if (envelopeDiv > 0)
+		if (envelopeTime > 0)
 		{
 			if (envelopeCounter-- == 0)
 			{
@@ -88,7 +105,7 @@ class Channel4 implements ISoundGenerator
 				{
 					if (amplitude > 0) --amplitude;
 				}
-				envelopeCounter = envelopeDiv;
+				envelopeCounter = envelopeTime;
 			}
 		}
 	}
@@ -103,6 +120,6 @@ class Channel4 implements ISoundGenerator
 			val = (randomValues[cyclePos & (randomValues.length - 1)]) ? amplitude : -amplitude;
 		}
 
-		return val;
+		return 0;//val;
 	}
 }
