@@ -15,7 +15,6 @@ class Audio
 	public static inline var NATIVE_SAMPLE_RATE:Int = (456*154*60);
 	public static inline var NATIVE_SAMPLE_RATIO:Int = 4;
 	static inline var BUFFER_LENGTH:Int = 0x8000;
-	static inline var CPU_SYNC_RATE:Float = NATIVE_SAMPLE_RATE / SAMPLE_RATE / NATIVE_SAMPLE_RATIO;
 	static inline var MAX_VOLUME:Int = 8;
 	// TODO: this shouldn't be defined here
 	static inline var FRAME_RATE = 60;
@@ -169,10 +168,10 @@ class Audio
 				ch1.setEnvelope(value);
 
 			case 0xff13:
-				ch1.baseFrequency = (ch1.frequency & 0x700) | value;
+				ch1.baseFrequency = (ch1.baseFrequency & 0x700) | value;
 
 			case 0xff14:
-				ch1.baseFrequency = (ch1.frequency & 0xff) | ((value & 0x7) << 8);
+				ch1.baseFrequency = (ch1.baseFrequency & 0xff) | ((value & 0x7) << 8);
 				ch1.repeat = !Util.getbit(value, 6);
 				if (ch1.repeat) ch1.enabled = true;
 				if (Util.getbit(value, 7))
@@ -226,7 +225,7 @@ class Audio
 				ch4.setEnvelope(value);
 
 			case 0xff22:
-				// TODO
+				ch4.setPolynomial(value);
 
 			case 0xff23:
 				ch4.repeat = !Util.getbit(value, 6);

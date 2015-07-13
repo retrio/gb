@@ -33,7 +33,7 @@ class GBPlugin extends EmulatorPlugin
 	var frameCount = 0;
 	var r = new Rectangle(0, 0, GB.WIDTH, GB.HEIGHT);
 #if encode
-	var encoder = new retrio.WavEncoder();
+	var encoder = new retrio.audio.WavEncoder();
 #end
 
 	public function new()

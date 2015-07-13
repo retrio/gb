@@ -30,8 +30,8 @@ class Channel3 implements ISoundGenerator
 	public var frequency(default, set):Int = 0;
 	inline function set_frequency(f:Int)
 	{
-		cycleLengthNumerator = Audio.NATIVE_SAMPLE_RATE * (0x800 - f);
-		cycleLengthDenominator = 0x10000;
+		cycleLengthNumerator = Std.int(Audio.NATIVE_SAMPLE_RATE/64) * (0x800 - f);
+		cycleLengthDenominator = Std.int(0x10000/64);
 		sampleLength = Std.int(cycleLengthNumerator / 32);
 		return frequency = f;
 	}
@@ -71,10 +71,11 @@ class Channel3 implements ISoundGenerator
 	public inline function play():Int
 	{
 		var val = 0;
+		cyclePos += (cycleLengthDenominator * Audio.NATIVE_SAMPLE_RATIO);
+		if (cyclePos >= cycleLengthNumerator) cyclePos -= cycleLengthNumerator;
+
 		if (outputLevel > 0)
 		{
-			cyclePos += (cycleLengthDenominator * Audio.NATIVE_SAMPLE_RATIO);
-			if (cyclePos >= cycleLengthNumerator) cyclePos -= cycleLengthNumerator;
 			var val1 = wavData[Math.floor(cyclePos / sampleLength) & 0x1f];
 			var val2 = wavData[Math.ceil(cyclePos / sampleLength) & 0x1f];
 			var t = (cyclePos / sampleLength) % 1;

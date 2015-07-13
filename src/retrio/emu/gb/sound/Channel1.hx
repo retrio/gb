@@ -55,8 +55,8 @@ class Channel1 implements ISoundGenerator
 	public var frequency(default, set):Int = 0;
 	inline function set_frequency(f:Int)
 	{
-		cycleLengthNumerator = Audio.NATIVE_SAMPLE_RATE * (0x800 - f);
-		cycleLengthDenominator = 0x20000;
+		cycleLengthNumerator = Std.int(Audio.NATIVE_SAMPLE_RATE/64) * (0x800 - f);
+		cycleLengthDenominator = Std.int(0x20000/64);
 		dutyLength = Std.int(cycleLengthNumerator / 8);
 		return frequency = f;
 	}
@@ -103,10 +103,11 @@ class Channel1 implements ISoundGenerator
 	public function setEnvelope(value:Int):Void
 	{
 		envelopeTime = value & 0x7;
+		envelopeCounter = envelopeTime;
 		envelopeType = Util.getbit(value, 3);
-		envelopeVolume = (value & 0xf0) >> 4;
-		amplitude = envelopeVolume;
-		dac = value & 0xf8 > 0;
+		amplitude = envelopeVolume = (value & 0xf0) >> 4;
+		// TODO: seems like this should work, but it doesn't?
+		dac = true;//value & 0xf8 > 0;
 	}
 
 	public var envelopeRegister(get, never):Int;
@@ -170,7 +171,6 @@ class Channel1 implements ISoundGenerator
 				{
 					if (amplitude > 0) --amplitude;
 				}
-				envelopeCounter = envelopeTime;
 			}
 		}
 	}
