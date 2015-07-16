@@ -21,12 +21,12 @@ class GBController
 				(controller.pressed(Button.Left) ? 0 : 0x2) |
 				(controller.pressed(Button.Up) ? 0 : 0x4) |
 				(controller.pressed(Button.Down) ? 0 : 0x8))
-			: 0x10) |
+			: 0x1f) &
 			(buttonsEnabled ?
 				((controller.pressed(Button.A) ? 0 : 0x1) |
 				(controller.pressed(Button.B) ? 0 : 0x2) |
 				(controller.pressed(Button.Select) ? 0 : 0x4) |
 				(controller.pressed(Button.Start) ? 0 : 0x8))
-			: 0x20);
+			: 0x2f);
 	}
 }
