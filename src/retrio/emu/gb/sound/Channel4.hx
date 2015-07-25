@@ -7,15 +7,10 @@ class Channel4 implements ISoundGenerator
 {
 	static var randomValues:Vector<Bool>;
 
-	var _enabled:Bool = false;
-	public var enabled(get, set):Bool;
+	public var enabled(get, never):Bool;
 	inline function get_enabled()
 	{
-		return _enabled && dac;
-	}
-	inline function set_enabled(b:Bool)
-	{
-		return _enabled = b;
+		return (lengthCounter > 0 || repeat) && dac && amplitude > 0;
 	}
 	public var dac:Bool = false;
 
@@ -31,7 +26,7 @@ class Channel4 implements ISoundGenerator
 	public var frequency(default, set):Int = 0;
 	inline function set_frequency(f:Int)
 	{
-		cycleLengthNumerator = Std.int(Audio.NATIVE_SAMPLE_RATE/64 * (f == 0 ? 0.5 : f)) >> (shiftClockFrequency + 2);
+		cycleLengthNumerator = Std.int(Audio.NATIVE_SAMPLE_RATE/64 * (f == 0 ? 0.5 : f)) << (shiftClockFrequency + 1);
 		cycleLengthDenominator = Std.int(0x80000/64);
 		return frequency = f;
 	}
@@ -40,6 +35,7 @@ class Channel4 implements ISoundGenerator
 	public var envelopeTime:Int = 0;
 	public var envelopeVolume:Int = 0;
 	public var envelopeCounter:Int = 0;
+	var envelopeOn:Bool = false;
 
 	public var shiftClockFrequency:Int = 0;
 	public var counterStep:Bool = false;
@@ -62,10 +58,11 @@ class Channel4 implements ISoundGenerator
 
 	public function setEnvelope(value:Int):Void
 	{
-		envelopeTime = value & 0x7;
+		envelopeTime = (value & 0x7);
 		envelopeCounter = envelopeTime;
 		envelopeType = Util.getbit(value, 3);
-		amplitude = envelopeVolume = (value & 0xf0) >> 4;
+		envelopeVolume = (value & 0xf0) >> 4;
+		envelopeOn = envelopeTime > 0;
 		dac = value & 0xf8 > 0;
 	}
 
@@ -73,41 +70,49 @@ class Channel4 implements ISoundGenerator
 	{
 		shiftClockFrequency = (value & 0xf0) >> 4;
 		counterStep = Util.getbit(value, 3);
-		frequency = value & 0x7;
+		frequency = (value & 0x7);
 	}
 
 	public function reset():Void
 	{
 		amplitude = envelopeVolume;
-		set_length(length);
-		enabled = true;
+		envelopeCounter = envelopeTime;
 		if (lengthCounter == 0) lengthCounter = 0x40;
 		cyclePos = 0;
 	}
 
 	public inline function lengthClock():Void
 	{
-		if (--lengthCounter <= 0)
+		if (lengthCounter > 0)
 		{
-			enabled = repeat;
+			--lengthCounter;
 		}
 	}
 
 	public inline function envelopeClock():Void
 	{
-		if (envelopeTime > 0)
+		if (envelopeOn && envelopeTime > 0)
 		{
-			if (envelopeCounter-- == 0)
+			if (--envelopeCounter == 0)
 			{
 				if (envelopeType)
 				{
-					if (amplitude < 0xf) ++amplitude;
+					if (++amplitude >= 0xf)
+					{
+						amplitude = 0xf;
+						envelopeOn = false;
+					}
+					else envelopeCounter = envelopeTime;
 				}
 				else
 				{
-					if (amplitude > 0) --amplitude;
+					if (--amplitude <= 0)
+					{
+						amplitude = 0;
+						envelopeOn = false;
+					}
+					else envelopeCounter = envelopeTime;
 				}
-				envelopeCounter = envelopeTime;
 			}
 		}
 	}

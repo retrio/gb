@@ -14,11 +14,12 @@ class Audio
 	public static inline var SAMPLE_RATE:Int = 44100;//#if flash 44100 #else 48000 #end;
 	public static inline var NATIVE_SAMPLE_RATE:Int = (456*154*60);
 	public static inline var NATIVE_SAMPLE_RATIO:Int = 4;
+	static inline var SEQUENCER_RATE = 8230;			// 456*154*60/8/64
 	static inline var BUFFER_LENGTH:Int = 0x8000;
 	static inline var MAX_VOLUME:Int = 8;
 	// TODO: this shouldn't be defined here
 	static inline var FRAME_RATE = 60;
-	static inline var FILTER_ORDER = #if flash 64 #else 1024 #end;
+	static inline var FILTER_ORDER = #if flash 63 #else 1023 #end;
 
 	public var cpu:CPU;
 	public var memory:Memory;
@@ -68,6 +69,7 @@ class Audio
 
 		ch1 = new Channel1();
 		ch2 = new Channel1();
+		ch2.ch2 = true;
 		ch3 = new Channel3();
 		ch4 = new Channel4();
 
@@ -159,80 +161,98 @@ class Audio
 		switch (addr)
 		{
 			case 0xff10:
-				ch1.setSweep(value);
+				if (soundEnabled)
+					ch1.setSweep(value);
 
 			case 0xff11:
 				ch1.setDuty(value);
 
 			case 0xff12:
-				ch1.setEnvelope(value);
+				if (soundEnabled)
+					ch1.setEnvelope(value);
 
 			case 0xff13:
-				ch1.baseFrequency = (ch1.baseFrequency & 0x700) | value;
+				if (soundEnabled)
+					ch1.baseFrequency = (ch1.baseFrequency & 0x700) | value;
 
 			case 0xff14:
-				ch1.baseFrequency = (ch1.baseFrequency & 0xff) | ((value & 0x7) << 8);
-				ch1.repeat = !Util.getbit(value, 6);
-				if (ch1.repeat) ch1.enabled = true;
-				if (Util.getbit(value, 7))
+				if (soundEnabled)
 				{
-					ch1.reset();
+					ch1.baseFrequency = (ch1.baseFrequency & 0xff) | ((value & 0x7) << 8);
+					ch1.repeat = !Util.getbit(value, 6);
+					if (Util.getbit(value, 7))
+					{
+						ch1.reset();
+					}
 				}
 
 			case 0xff16:
 				ch2.setDuty(value);
 
 			case 0xff17:
-				ch2.setEnvelope(value);
+				if (soundEnabled)
+					ch2.setEnvelope(value);
 
 			case 0xff18:
-				ch2.baseFrequency = (ch2.baseFrequency & 0x700) | value;
+				if (soundEnabled)
+					ch2.baseFrequency = (ch2.baseFrequency & 0x700) | value;
 
 			case 0xff19:
-				ch2.baseFrequency = (ch2.baseFrequency & 0xff) | ((value & 0x7) << 8);
-				ch2.repeat = !Util.getbit(value, 6);
-				if (ch2.repeat) ch2.enabled = true;
-				if (Util.getbit(value, 7))
+				if (soundEnabled)
 				{
-					ch2.reset();
+					ch2.baseFrequency = (ch2.baseFrequency & 0xff) | ((value & 0x7) << 8);
+					ch2.repeat = !Util.getbit(value, 6);
+					if (Util.getbit(value, 7))
+					{
+						ch2.reset();
+					}
 				}
 
 			case 0xff1a:
-				ch3.enabled = Util.getbit(value, 7);
+				if (soundEnabled)
+					ch3.canPlay = Util.getbit(value, 7);
 
 			case 0xff1b:
 				ch3.length = value;
 
 			case 0xff1c:
-				ch3.outputLevel = (value & 0x30) >> 5;
+				if (soundEnabled)
+					ch3.setOutput(value);
 
 			case 0xff1d:
-				ch3.frequency = (ch3.frequency & 0x700) | value;
+				if (soundEnabled)
+					ch3.frequency = (ch3.frequency & 0x700) | value;
 
 			case 0xff1e:
-				ch3.frequency = (ch3.frequency & 0xff) | ((value & 0x7) << 8);
-				ch3.repeat = !Util.getbit(value, 6);
-				if (ch3.repeat) ch3.enabled = true;
-				if (Util.getbit(value, 7))
+				if (soundEnabled)
 				{
-					ch3.reset();
+					ch3.frequency = (ch3.frequency & 0xff) | ((value & 0x7) << 8);
+					ch3.repeat = !Util.getbit(value, 6);
+					if (Util.getbit(value, 7))
+					{
+						ch3.reset();
+					}
 				}
 
 			case 0xff20:
 				ch4.length = value & 0x3f;
 
 			case 0xff21:
-				ch4.setEnvelope(value);
+				if (soundEnabled)
+					ch4.setEnvelope(value);
 
 			case 0xff22:
-				ch4.setPolynomial(value);
+				if (soundEnabled)
+					ch4.setPolynomial(value);
 
 			case 0xff23:
-				ch4.repeat = !Util.getbit(value, 6);
-				if (ch4.repeat) ch4.enabled = true;
-				if (Util.getbit(value, 7))
+				if (soundEnabled)
 				{
-					ch4.reset();
+					ch4.repeat = !Util.getbit(value, 6);
+					if (Util.getbit(value, 7))
+					{
+						ch4.reset();
+					}
 				}
 
 			case 0xff24:
@@ -282,77 +302,32 @@ class Audio
 
 	inline function predict()
 	{
-		var nextEvent:Int = Std.int(cpu.apuCycles - 1);
-		var next:Int;
-
-		if (ch1.lengthCounter > 0 && !ch1.repeat)
-		{
-			// length
-			next = (8 - cycles) + (8 * ch1.lengthCounter);
-			if (next < nextEvent) nextEvent = next;
-		}
-		if (ch1.enabled)
-		{
-			// sweep
-			next = (cycles > 2 ? (10 - cycles) : (2 - cycles)) + (8 * ch1.sweepCounter);
-			if (next < nextEvent) nextEvent = next;
-			// envelope
-			next = (cycles > 4 ? (12 - cycles) : (4 - cycles)) + (8 * ch1.envelopeCounter);
-			if (next < nextEvent) nextEvent = next;
-		}
-
-		if (ch2.lengthCounter > 0 && !ch2.repeat)
-		{
-			// length
-			next = (8 - cycles) + (8 * ch2.lengthCounter);
-			if (next < nextEvent) nextEvent = next;
-		}
-		if (ch2.enabled)
-		{
-			// envelope
-			next = (cycles > 4 ? (12 - cycles) : (4 - cycles)) + (8 * ch2.envelopeCounter);
-			if (next < nextEvent) nextEvent = next;
-		}
-
-		if (ch3.enabled && !ch3.repeat)
-		{
-			next = (8 - cycles) + (8 * ch3.lengthCounter);
-			if (next < nextEvent) nextEvent = next;
-		}
-
-		if (ch4.lengthCounter > 0 && !ch4.repeat)
-		{
-			// length
-			next = (8 - cycles) + (8 * ch4.lengthCounter);
-			if (next < nextEvent) nextEvent = next;
-		}
-		if (ch4.enabled)
-		{
-			// envelope
-			next = (cycles > 4 ? (12 - cycles) : (4 - cycles)) + (8 * ch4.envelopeCounter);
-			if (next < nextEvent) nextEvent = next;
-		}
-
-		return (nextEvent < 0 ? 0 : nextEvent) + 1;
+		return subCycles;
 	}
 
+	var subCycles:Int = SEQUENCER_RATE;
 	inline function runCycle()
 	{
-		switch (cycles++)
+		--subCycles;
+		if (subCycles == 0)
 		{
-			case 0:
-				lengthClock();
-			case 2:
-				lengthClock();
-				sweepClock();
-			case 4:
-				lengthClock();
-			case 6:
-				lengthClock();
-				sweepClock();
-			case 7:
-				envelopeClock();
-				cycles = 0;
+			switch (cycles++)
+			{
+				case 0:
+					lengthClock();
+				case 2:
+					lengthClock();
+					sweepClock();
+				case 4:
+					lengthClock();
+				case 6:
+					lengthClock();
+					sweepClock();
+				case 7:
+					envelopeClock();
+					cycles = 0;
+			}
+			subCycles = SEQUENCER_RATE;
 		}
 	}
 

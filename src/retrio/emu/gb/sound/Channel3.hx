@@ -3,16 +3,12 @@ package retrio.emu.gb.sound;
 
 class Channel3 implements ISoundGenerator
 {
-	var _enabled:Bool = false;
-	public var enabled(get, set):Bool;
+	public var enabled(get, never):Bool;
 	inline function get_enabled()
 	{
-		return _enabled && dac;
+		return (lengthCounter > 0 || repeat) && dac && canPlay && outputLevel > 0;
 	}
-	inline function set_enabled(b:Bool)
-	{
-		return _enabled = b;
-	}
+	public var canPlay:Bool = false;
 	public var dac:Bool = false;
 
 	public var repeat:Bool = true;
@@ -20,7 +16,6 @@ class Channel3 implements ISoundGenerator
 	function set_length(l:Int)
 	{
 		lengthCounter = 0x100-l;
-		enabled = true;
 		return length = l;
 	}
 	public var lengthCounter:Int = 0;
@@ -50,20 +45,22 @@ class Channel3 implements ISoundGenerator
 		wavData = new ByteString(32);
 	}
 
+	public inline function setOutput(value:Int)
+	{
+		outputLevel = (value & 0x60) >> 5;
+		dac = value & 0xf8 > 0;
+	}
+
 	public inline function lengthClock():Void
 	{
 		if (lengthCounter > 0)
 		{
-			if (--lengthCounter == 0)
-			{
-				enabled = repeat;
-			}
+			--lengthCounter;
 		}
 	}
 
 	public function reset():Void
 	{
-		enabled = repeat = true;
 		if (lengthCounter == 0) lengthCounter = 0x100;
 		cyclePos = 0;
 	}
@@ -74,7 +71,7 @@ class Channel3 implements ISoundGenerator
 		cyclePos += (cycleLengthDenominator * Audio.NATIVE_SAMPLE_RATIO);
 		if (cyclePos >= cycleLengthNumerator) cyclePos -= cycleLengthNumerator;
 
-		if (outputLevel > 0)
+		if (enabled)
 		{
 			var val1 = wavData[Math.floor(cyclePos / sampleLength) & 0x1f];
 			var val2 = wavData[Math.ceil(cyclePos / sampleLength) & 0x1f];
