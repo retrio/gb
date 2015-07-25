@@ -176,6 +176,13 @@ class CPU
 			}
 		}
 
+		var controller = memory.controllers[0];
+		if (controller != null && controller.changed)
+		{
+			controller.changed = false;
+			irq(Joypad);
+		}
+
 		audio.catchUp();
 	}
 
@@ -1743,7 +1750,7 @@ class CPU
 		cycleCount += ticks;
 		cycles += ticks;
 		apuCycles += ticks;
-		divTicks += ticks;
+		divTicks = (divTicks + ticks) & 0xffff;
 		if (timerEnabled)
 		{
 			if (timerPostpone) timerPostpone = false;
@@ -1755,7 +1762,7 @@ class CPU
 	inline function tickTimer(ticks:Int)
 	{
 		timerTicks += ticks;
-		while (timerTicks > tacClocks)
+		while (timerTicks >= tacClocks)
 		{
 			timerTicks -= tacClocks;
 			if (++timerValue == 0x100)
