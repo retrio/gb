@@ -61,13 +61,5 @@ class Main extends retrio.ui.openfl.Shell
 
 		loadPlugin("gb");
 		addController(controller);
-
-#if js
-		var byteArray = openfl.Assets.getBytes("assets/roms/kirby.gb");
-		var bytes = haxe.io.Bytes.ofData(byteArray.byteView.buffer);
-		plugin.loadGame(new FileWrapper(new haxe.io.BytesInput(bytes), "kirby"));
-		plugin.start();
-		loaded = true;
-#end
 	}
 }

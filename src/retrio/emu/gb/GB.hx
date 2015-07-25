@@ -25,6 +25,7 @@ class GB implements IEmulator implements IState
 	public var video:Video;
 	public var audio:Audio;
 	public var controllers:Vector<GBController> = new Vector(2);
+	public var palette:Palette;
 
 	var _saveCounter:Int = 0;
 	var romName:String;
@@ -40,6 +41,7 @@ class GB implements IEmulator implements IState
 		cpu = new CPU();
 		video = new Video();
 		audio = new Audio();
+		palette = new Palette();
 
 		cpu.init(memory, video, audio);
 		video.init(cpu, memory);
@@ -104,7 +106,7 @@ class GB implements IEmulator implements IState
 
 	public function getColor(c:Int)
 	{
-		return Palette.getColor(c);
+		return palette.getColor(c);
 	}
 
 	function saveSram()

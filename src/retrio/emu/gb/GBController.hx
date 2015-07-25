@@ -5,12 +5,14 @@ class GBController
 {
 	public var directionsEnabled:Bool = false;
 	public var buttonsEnabled:Bool = false;
+	public var changed:Bool = false;
 
 	var controller:IController;
 
 	public function new(controller:IController)
 	{
 		this.controller = controller;
+		controller.inputHandler = this.handleInput;
 	}
 
 	public inline function buttons()
@@ -28,5 +30,10 @@ class GBController
 				(controller.pressed(Button.Select) ? 0 : 0x4) |
 				(controller.pressed(Button.Start) ? 0 : 0x8))
 			: 0x2f);
+	}
+
+	function handleInput(e:Dynamic)
+	{
+		changed = true;
 	}
 }

@@ -12,6 +12,7 @@ class Memory
 	public var video:Video;
 	public var audio:Audio;
 	public var rtc:RTC;
+	public var controllers:Vector<GBController>;
 
 	public var ram:ByteString;		// external RAM
 	public var wram1:ByteString;	// fixed work RAM
@@ -27,8 +28,6 @@ class Memory
 	public var sramDirty:Bool = false;
 
 	var joypadButtons:Bool = false;
-
-	var controllers:Vector<GBController>;
 
 	public function new(rom:ROM)
 	{
@@ -221,7 +220,7 @@ class Memory
 				return controller == null ? 0 : controller.buttons();
 			case 0xff04:
 				var result = (cpu.divTicks >> 8) & 0xff;
-				cpu.divTicks &= 0xff;
+				//cpu.divTicks &= 0xff;
 				return result;
 			case 0xff05: return cpu.timerValue;
 			case 0xff06: return cpu.timerMod;

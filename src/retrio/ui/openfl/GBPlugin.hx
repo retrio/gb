@@ -86,7 +86,7 @@ class GBPlugin extends EmulatorPlugin
 			var bm = gb.buffer;
 			for (i in 0 ... GB.WIDTH * GB.HEIGHT)
 			{
-				Memory.setI32(i*4, Palette.getColor(bm.get(i)));
+				Memory.setI32(i*4, gb.palette.getColor(bm.get(i)));
 			}
 
 			pixels.position = 0;
@@ -151,8 +151,9 @@ class GBPlugin extends EmulatorPlugin
 		var l:Int;
 		if (_buffering)
 		{
-			l = Std.int(Math.max(0, 0x1000 - gb.audio.buffer1.length));
+			l = Std.int(Math.max(0, 0x800 - gb.audio.buffer1.length));
 			if (l <= 0) _buffering = false;
+			else l = 0x800;
 		}
 		else
 		{
