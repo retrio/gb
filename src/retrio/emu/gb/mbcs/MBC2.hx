@@ -1,16 +1,10 @@
 package retrio.emu.gb.mbcs;
 
 
-class MBC2 extends MBC
+class MBC2 extends MBC implements IState
 {
-	var ramEnable:Bool = false;
-	var romSelect:Bool = true;
-	var romBank(default, set):Int = 1;
-	inline function set_romBank(b:Int)
-	{
-		memory.rom2 = memory.romBanks[b];
-		return romBank = b;
-	}
+	@:state var ramEnable:Bool = false;
+	@:state var romSelect:Bool = true;
 
 	override public function write(addr:Int, val:Int):Void
 	{
@@ -21,7 +15,7 @@ class MBC2 extends MBC
 					ramEnable = (val & 0xf) == 0xa;
 			case 0x2000, 0x3000:
 				if (addr & 0x100 == 0x100)
-					romBank = val & 0xf;
+					memory.romBank = val & 0xf;
 		}
 	}
 }

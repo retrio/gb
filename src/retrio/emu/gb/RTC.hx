@@ -1,12 +1,12 @@
 package retrio.emu.gb;
 
 
-class RTC
+class RTC implements IState
 {
-	public var register:Int = 0;	// RTC register selected or 0 if none
+	@:state public var register:Int = 0;		// RTC register selected or 0 if none
 
-	var rtcTime:Date = Date.now();	// latched RTC time
-	var rtcLatch:Bool = false;
+	@:state var rtcTime:Date = Date.now();	// latched RTC time
+	@:state var rtcLatch:Bool = false;
 
 	public function new() {}
 

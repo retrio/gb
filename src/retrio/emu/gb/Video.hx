@@ -25,53 +25,85 @@ typedef SpriteInfo = {
 
 
 @:build(retrio.macro.Optimizer.build())
-class Video
+class Video implements IState
 {
 	public var cpu:CPU;
 	public var memory:Memory;
 
 	public var screenBuffer:ByteString = new ByteString(160 * 144);
 
-	public var oam:ByteString;		// object attribute memory
-	public var vram:ByteString;		// video RAM
+	@:state public var oam:ByteString;		// object attribute memory
+	@:state public var vram:ByteString;		// video RAM
 
-	public var frameCount:Int = 0;
-	public var scanline:Int = 153;
-	public var cycles:Int = 396;
-	public var stolenCycles:Int = 0;
-	public var finished:Bool = false;
+	@:state public var frameCount:Int = 0;
+	@:state public var scanline:Int = 153;
+	@:state public var cycles:Int = 396;
+	@:state public var stolenCycles:Int = 0;
+	@:state public var finished:Bool = false;
 
-	public var lcdDisplay:Bool = true;
+	@:state public var lcdDisplay:Bool = true;
 
-	var bgDisplay:Bool = false;
-	var objDisplay:Bool = false;
-	var tallSprites:Bool = false;
-	var bgTileAddr:Int = 0x9800;
-	var tileDataAddr:Int = 0x8800;
-	var windowDisplay:Bool = false;
-	var windowTileAddr:Int = 0x9800;
+	@:state var bgDisplay:Bool = false;
+	@:state var objDisplay:Bool = false;
+	@:state var tallSprites:Bool = false;
+	@:state var bgTileAddr:Int = 0x9800;
+	@:state var tileDataAddr:Int = 0x8800;
+	@:state var windowDisplay:Bool = false;
+	@:state var windowTileAddr:Int = 0x9800;
 
-	public var hblankInterrupt:Bool = false;
-	public var vblankInterrupt:Bool = false;
-	public var oamInterrupt:Bool = false;
-	public var coincidenceInterrupt:Bool = false;
-	public var coincidenceScanline:Int = 0;
+	@:state public var hblankInterrupt:Bool = false;
+	@:state public var vblankInterrupt:Bool = false;
+	@:state public var oamInterrupt:Bool = false;
+	@:state public var coincidenceInterrupt:Bool = false;
+	@:state public var coincidenceScanline:Int = 0;
 
 	var mode:VideoMode = Oam;
 
-	var bgPalette:Vector<Int> = Vector.fromArrayCopy([0, 1, 2, 3]);
-	var sp1Palette:Vector<Int> = Vector.fromArrayCopy([0, 1, 2, 3]);
-	var sp2Palette:Vector<Int> = Vector.fromArrayCopy([0, 1, 2, 3]);
+	@:state var bgPalette:Vector<Int> = Vector.fromArrayCopy([0, 1, 2, 3]);
+	@:state var sp1Palette:Vector<Int> = Vector.fromArrayCopy([0, 1, 2, 3]);
+	@:state var sp2Palette:Vector<Int> = Vector.fromArrayCopy([0, 1, 2, 3]);
 
-	var tileBuffer:ByteString;
+	@:state var tileBuffer:ByteString;
 	var spriteInfo:Vector<SpriteInfo> = new Vector(40);
 
-	var scrollX:Int = 0;
-	var scrollY:Int = 0;
-	var windowX:Int = 0;
-	var windowY:Int = 0;
+	// compact binary serializer for spriteinfo
+	@:state var spriteInfoSerialized(get, set):haxe.io.Bytes;
+	inline function get_spriteInfoSerialized():haxe.io.Bytes
+	{
+		var b = new haxe.io.BytesOutput();
+		for (s in spriteInfo)
+		{
+			b.writeByte(s.x);
+			b.writeByte(s.y);
+			b.writeByte(s.tile);
+			var meta = (s.palette ? 0x1 : 0) | (s.xflip ? 0x2 : 0) | (s.yflip ? 0x4 : 0) | (s.behindBg ? 0x8 : 0);
+			b.writeByte(meta);
+		}
+		return b.getBytes();
+	}
+	inline function set_spriteInfoSerialized(b:haxe.io.Bytes)
+	{
+		var i = new haxe.io.BytesInput(b);
+		for (s in spriteInfo)
+		{
+			s.x = i.readByte();
+			s.y = i.readByte();
+			s.tile = i.readByte();
+			var meta = i.readByte();
+			s.palette = Util.getbit(meta, 0);
+			s.xflip = Util.getbit(meta, 1);
+			s.yflip = Util.getbit(meta, 2);
+			s.behindBg = Util.getbit(meta, 3);
+		}
+		return b;
+	}
 
-	var dmaAddress:Int = 0;
+	@:state var scrollX:Int = 0;
+	@:state var scrollY:Int = 0;
+	@:state var windowX:Int = 0;
+	@:state var windowY:Int = 0;
+
+	@:state var dmaAddress:Int = 0;
 
 	public function new()
 	{

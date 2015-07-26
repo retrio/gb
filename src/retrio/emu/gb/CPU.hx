@@ -4,50 +4,48 @@ import haxe.ds.Vector;
 
 
 @:build(retrio.macro.Optimizer.build())
-class CPU
+class CPU implements IState
 {
 	public var memory:Memory;
 	public var video:Video;
 	public var audio:Audio;
 
-	public var cycleCount:Int = 0;
-	public var cycles:Int = 0;
-	public var apuCycles:Float = 0;
+	@:state public var cycleCount:Int = 0;
+	@:state public var cycles:Int = 0;
+	@:state public var apuCycles:Int = 0;
 
 	// timers
-	public var divTicks:Int = 0;
-	public var timerValue:Int = 0;
-	public var timerTicks:Int = 0;
-	public var tacClocks:Int = 0x400;
-	public var timerMod:Int = 0;
-	public var timerEnabled:Bool = false;
+	@:state public var divTicks:Int = 0;
+	@:state public var timerValue:Int = 0;
+	@:state public var timerTicks:Int = 0;
+	@:state public var tacClocks:Int = 0x400;
+	@:state public var timerMod:Int = 0;
+	@:state public var timerEnabled:Bool = false;
 
-	public var halted:Bool = false;
+	@:state public var halted:Bool = false;
 
-	var ticks:Int = 0;
-	var timerPostpone:Bool = true;
+	@:state var ticks:Int = 0;
+	@:state var timerPostpone:Bool = true;
 
 #if cputrace
 	var log:String;
 #end
 
-	var a:Int = 0x01;
-	var b:Int = 0x00;
-	var c:Int = 0x13;
-	var d:Int = 0x00;
-	var e:Int = 0xd8;
-	var h:Int = 0x01;
-	var l:Int = 0x4d;
+	@:state var a:Byte = 0x01;
+	@:state var b:Byte = 0x00;
+	@:state var c:Byte = 0x13;
+	@:state var d:Byte = 0x00;
+	@:state var e:Byte = 0xd8;
+	@:state var h:Byte = 0x01;
+	@:state var l:Byte = 0x4d;
 
-	var sp:Int = 0xfffe;
-	var pc:Int = 0x100;
-
+	// don't need @:state due to being contained in f
 	var cf:Bool = true;		// carry flag
 	var hf:Bool = true;		// half carry flag
 	var sf:Bool = false;	// subtract flag
 	var zf:Bool = true;		// zero flag
 
-	var f(get, set):Int;
+	@:state var f(get, set):Byte;
 	inline function get_f() return (zf ? 0x80 : 0) | (sf ? 0x40 : 0) | (hf ? 0x20 : 0) | (cf ? 0x10 : 0);
 	inline function set_f(byte:Int)
 	{
@@ -91,9 +89,12 @@ class CPU
 		return byte;
 	}
 
-	var ime:Bool = true;					// interrupt master enable
-	var interruptsRequested:Vector<Bool>;
-	var interruptsEnabled:Vector<Bool>;
+	@:state var sp:Int = 0xfffe;
+	@:state var pc:Int = 0x100;
+
+	@:state var ime:Bool = true;					// interrupt master enable
+	@:state var interruptsRequested:Vector<Bool>;
+	@:state var interruptsEnabled:Vector<Bool>;
 
 	public var interruptsEnabledFlag(get, set):Int;
 	inline function get_interruptsEnabledFlag()
@@ -1748,6 +1749,7 @@ class CPU
 	inline function tick(ticks:Int)
 	{
 		cycleCount += ticks;
+		if (cycleCount > 536870912) cycleCount -= 536870912;
 		cycles += ticks;
 		apuCycles += ticks;
 		divTicks = (divTicks + ticks) & 0xffff;

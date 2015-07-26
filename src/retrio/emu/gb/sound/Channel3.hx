@@ -1,28 +1,28 @@
 package retrio.emu.gb.sound;
 
 
-class Channel3 implements ISoundGenerator
+class Channel3 implements ISoundGenerator implements IState
 {
 	public var enabled(get, never):Bool;
 	inline function get_enabled()
 	{
 		return (lengthCounter > 0 || repeat) && dac && canPlay && outputLevel > 0;
 	}
-	public var canPlay:Bool = false;
-	public var dac:Bool = false;
+	@:state public var canPlay:Bool = false;
+	@:state public var dac:Bool = false;
 
-	public var repeat:Bool = true;
-	public var length(default, set):Int = 0;
+	@:state public var repeat:Bool = true;
+	@:state public var length(default, set):Int = 0;
 	function set_length(l:Int)
 	{
 		lengthCounter = 0x100-l;
 		return length = l;
 	}
-	public var lengthCounter:Int = 0;
+	@:state public var lengthCounter:Int = 0;
 
-	public var wavData:ByteString;
+	@:state public var wavData:ByteString;
 
-	public var frequency(default, set):Int = 0;
+	@:state public var frequency(default, set):Int = 0;
 	inline function set_frequency(f:Int)
 	{
 		cycleLengthNumerator = Std.int(Audio.NATIVE_SAMPLE_RATE/64) * (0x800 - f);
@@ -31,12 +31,12 @@ class Channel3 implements ISoundGenerator
 		return frequency = f;
 	}
 
-	public var outputLevel:Int;
+	@:state public var outputLevel:Int;
 
-	var cycleLengthNumerator:Int = 1;
-	var cycleLengthDenominator:Int = 1;
-	var cyclePos:Int = 0;
-	var sampleLength:Int = 1;
+	@:state var cycleLengthNumerator:Int = 1;
+	@:state var cycleLengthDenominator:Int = 1;
+	@:state var cyclePos:Int = 0;
+	@:state var sampleLength:Int = 1;
 
 	public function new()
 	{

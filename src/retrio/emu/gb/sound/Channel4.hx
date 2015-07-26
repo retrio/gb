@@ -3,7 +3,7 @@ package retrio.emu.gb.sound;
 import haxe.ds.Vector;
 
 
-class Channel4 implements ISoundGenerator
+class Channel4 implements ISoundGenerator implements IState
 {
 	static var randomValues:Vector<Bool>;
 
@@ -12,18 +12,18 @@ class Channel4 implements ISoundGenerator
 	{
 		return (lengthCounter > 0 || repeat) && dac && amplitude > 0;
 	}
-	public var dac:Bool = false;
+	@:state public var dac:Bool = false;
 
-	public var repeat:Bool = true;
-	public var length(default, set):Int = 0;
+	@:state public var repeat:Bool = true;
+	@:state public var length(default, set):Int = 0;
 	function set_length(l:Int)
 	{
 		lengthCounter = 0x40-l;
 		return length = l;
 	}
-	public var lengthCounter:Int = 0;
+	@:state public var lengthCounter:Int = 0;
 
-	public var frequency(default, set):Int = 0;
+	@:state public var frequency(default, set):Int = 0;
 	inline function set_frequency(f:Int)
 	{
 		cycleLengthNumerator = Std.int(Audio.NATIVE_SAMPLE_RATE/64 * (f == 0 ? 0.5 : f)) << (shiftClockFrequency + 1);
@@ -31,21 +31,21 @@ class Channel4 implements ISoundGenerator
 		return frequency = f;
 	}
 
-	public var envelopeType:Bool = false;
-	public var envelopeTime:Int = 0;
-	public var envelopeVolume:Int = 0;
-	public var envelopeCounter:Int = 0;
-	var envelopeOn:Bool = false;
+	@:state public var envelopeType:Bool = false;
+	@:state public var envelopeTime:Int = 0;
+	@:state public var envelopeVolume:Int = 0;
+	@:state public var envelopeCounter:Int = 0;
+	@:state var envelopeOn:Bool = false;
 
-	public var shiftClockFrequency:Int = 0;
-	public var counterStep:Bool = false;
+	@:state public var shiftClockFrequency:Int = 0;
+	@:state public var counterStep:Bool = false;
 
-	var amplitude:Int = 0;
-	var cycleLengthNumerator:Int = 1;
-	var cycleLengthDenominator:Int = 1;
-	var cyclePos:Int = 0;
-	var noisePos:Int = 0;
-	var counterFlip:Bool = false;
+	@:state var amplitude:Int = 0;
+	@:state var cycleLengthNumerator:Int = 1;
+	@:state var cycleLengthDenominator:Int = 1;
+	@:state var cyclePos:Int = 0;
+	@:state var noisePos:Int = 0;
+	@:state var counterFlip:Bool = false;
 
 	public function new()
 	{

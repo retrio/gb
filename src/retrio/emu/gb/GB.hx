@@ -1,11 +1,15 @@
 package retrio.emu.gb;
 
+import haxe.Serializer;
 import haxe.ds.Vector;
+import haxe.io.BytesInput;
 import haxe.io.Output;
 
 
 class GB implements IEmulator implements IState
 {
+	@:stateChildren static var stateChildren = ['cpu', 'memory', 'rom', 'video', 'audio'];
+
 	public static inline var WIDTH:Int = 160;
 	public static inline var HEIGHT:Int = 144;
 	// minimum # of frames to wait between saves
@@ -24,12 +28,13 @@ class GB implements IEmulator implements IState
 	public var rom:ROM;
 	public var video:Video;
 	public var audio:Audio;
+
 	public var controllers:Vector<GBController> = new Vector(2);
 	public var palette:Palette;
 
 	var _saveCounter:Int = 0;
-	var romName:String;
-	var useSram:Bool = true;
+	@:state var romName:String;
+	@:state var useSram:Bool = true;
 
 	public function new() {}
 
@@ -109,6 +114,26 @@ class GB implements IEmulator implements IState
 		return palette.getColor(c);
 	}
 
+	public function savePersistentState(slot:SaveSlot):Void
+	{
+		if (io != null)
+		{
+			var state = saveState();
+			io.writeBytesToFile(romName + ".st" + slot, state);
+		}
+	}
+
+	public function loadPersistentState(slot:SaveSlot):Void
+	{
+		if (io != null)
+		{
+			var stateFile = io.readFile(romName + ".st" + slot);
+			if (stateFile == null) throw "State " + slot + " does not exist";
+			var input = new BytesInput(stateFile.readAll());
+			loadState(input);
+		}
+	}
+
 	function saveSram()
 	{
 		if (useSram && rom.hasSram && memory.sramDirty && io != null)
@@ -133,9 +158,5 @@ class GB implements IEmulator implements IState
 				memory.sramDirty = false;
 			}
 		}
-	}
-
-	public function writeState(out:Output)
-	{
 	}
 }

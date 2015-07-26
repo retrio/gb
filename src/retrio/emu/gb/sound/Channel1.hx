@@ -3,7 +3,7 @@ package retrio.emu.gb.sound;
 import haxe.ds.Vector;
 
 
-class Channel1 implements ISoundGenerator
+class Channel1 implements ISoundGenerator implements IState
 {
 	static var dutyLookup:Vector<Vector<Bool>> = Vector.fromArrayCopy([
 		Vector.fromArrayCopy([	true,	false,	false,	false,	false,	false,	false,	false,	]),
@@ -12,24 +12,24 @@ class Channel1 implements ISoundGenerator
 		Vector.fromArrayCopy([	true,	true,	true,	true,	true,	true,	false,	false,	]),
 	]);
 
-	public var ch2:Bool = false;
+	@:state public var ch2:Bool = false;
 
 	public var enabled(get, never):Bool;
 	inline function get_enabled()
 	{
 		return (repeat || lengthCounter > 0) && !sweepFault && dac && (amplitude > 0 || (envelopeType && envelopeTime > 0));
 	}
-	public var dac:Bool = false;
+	@:state public var dac:Bool = false;
 
-	public var length:Int = 0;
+	@:state public var length:Int = 0;
 	inline function set_length(l:Int)
 	{
 		lengthCounter = 0x40 - l;
 		return length = l;
 	}
-	public var lengthCounter:Int = 0;
+	@:state public var lengthCounter:Int = 0;
 
-	public var duty(default, set):Int = 0;
+	@:state public var duty(default, set):Int = 0;
 	function set_duty(i:Int)
 	{
 		cachedDuty = dutyLookup[i];
@@ -37,22 +37,22 @@ class Channel1 implements ISoundGenerator
 	}
 	var cachedDuty:Vector<Bool> = dutyLookup[0];
 
-	public var sweepDecrease:Bool = false;
-	public var sweepDiv:Int = 0;
-	public var sweepTime:Int = 0;
-	public var sweepCounter:Int = 0;
-	var swept:Bool = false;
-	var sweepFault:Bool = false;
-	var shadowFrequency:Int = 0;
+	@:state public var sweepDecrease:Bool = false;
+	@:state public var sweepDiv:Int = 0;
+	@:state public var sweepTime:Int = 0;
+	@:state public var sweepCounter:Int = 0;
+	@:state var swept:Bool = false;
+	@:state var sweepFault:Bool = false;
+	@:state var shadowFrequency:Int = 0;
 
-	public var envelopeType:Bool = false;
-	public var envelopeTime:Int = 0;
-	public var envelopeVolume:Int = 0;
-	public var envelopeCounter:Int = 0;
-	var envelopeOn:Bool = false;
+	@:state public var envelopeType:Bool = false;
+	@:state public var envelopeTime:Int = 0;
+	@:state public var envelopeVolume:Int = 0;
+	@:state public var envelopeCounter:Int = 0;
+	@:state var envelopeOn:Bool = false;
 
-	public var repeat:Bool = true;
-	public var frequency(default, set):Int = 0;
+	@:state public var repeat:Bool = true;
+	@:state public var frequency(default, set):Int = 0;
 	inline function set_frequency(f:Int)
 	{
 		sweepFault = false;
@@ -61,17 +61,17 @@ class Channel1 implements ISoundGenerator
 		dutyLength = Std.int(cycleLengthNumerator / 8);
 		return frequency = f;
 	}
-	public var baseFrequency(default, set):Int = 0;
+	@:state public var baseFrequency(default, set):Int = 0;
 	inline function set_baseFrequency(f:Int)
 	{
 		return baseFrequency = frequency = f;
 	}
 
-	var cycleLengthNumerator:Int = 1;
-	var cycleLengthDenominator:Int = 1;
-	var cyclePos:Int = 0;
-	var dutyLength:Int = 1;
-	public var amplitude:Int = 0;
+	@:state var cycleLengthNumerator:Int = 1;
+	@:state var cycleLengthDenominator:Int = 1;
+	@:state var cyclePos:Int = 0;
+	@:state var dutyLength:Int = 1;
+	@:state public var amplitude:Int = 0;
 
 	public function new() {}
 

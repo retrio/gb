@@ -4,8 +4,10 @@ import haxe.ds.Vector;
 import retrio.emu.gb.mbcs.*;
 
 
-class Memory
+class Memory implements IState
 {
+	@:stateChildren static var stateChildren = ['mbc', 'rtc'];
+
 	public var rom:ROM;
 	public var mbc:MBC;
 	public var cpu:CPU;
@@ -14,20 +16,48 @@ class Memory
 	public var rtc:RTC;
 	public var controllers:Vector<GBController>;
 
-	public var ram:ByteString;		// external RAM
-	public var wram1:ByteString;	// fixed work RAM
-	public var wram2:ByteString;	// switchable work RAM
-	public var hram:ByteString;		// HRAM
+	public var ram:ByteString;				// pointer to external RAM
+	public var wram1:ByteString;			// pointer to fixed work RAM
+	public var wram2:ByteString;			// pointer to switchable work RAM
+	@:state public var hram:ByteString;		// HRAM
 
-	public var rom1:ByteString;		// fixed ROM bank
-	public var rom2:ByteString;		// switchable ROM bank
 	public var romBanks:Vector<ByteString>;
-	public var ramBanks:Vector<ByteString>;
-	public var wramBanks:Vector<ByteString>;
+	@:state public var ramBanks:Vector<ByteString>;
+	@:state public var wramBanks:Vector<ByteString>;
+
+	@:state public var romBank(default, set):Byte;
+	inline function set_romBank(b:Byte)
+	{
+		rom2 = romBanks[b % romBanks.length];
+		return romBank = b;
+	}
+
+	@:state public var ramBank(default, set):Byte;
+	inline function set_ramBank(b:Byte)
+	{
+		ram = ramBanks[b % ramBanks.length];
+		return ramBank = b;
+	}
+
+	@:state public var wram1Bank(default, set):Byte;
+	inline function set_wram1Bank(b:Byte)
+	{
+		wram1 = wramBanks[b % wramBanks.length];
+		return wram1Bank = b;
+	}
+	@:state public var wram2Bank(default, set):Byte;
+	inline function set_wram2Bank(b:Byte)
+	{
+		wram2 = wramBanks[b % wramBanks.length];
+		return wram2Bank = b;
+	}
+
+	public var rom1:ByteString;		// pointer to fixed ROM bank
+	public var rom2:ByteString;		// pointer to switchable ROM bank
 
 	public var sramDirty:Bool = false;
 
-	var joypadButtons:Bool = false;
+	@:state var joypadButtons:Bool = false;
 
 	public function new(rom:ROM)
 	{
@@ -43,14 +73,15 @@ class Memory
 			wramBanks[i] = new ByteString(0x1000);
 			wramBanks[i].fillWith(0);
 		}
-		wram1 = wramBanks[0];
-		wram2 = wramBanks[1];
+		wram1Bank = 0;
+		wram2Bank = 1;
 
 		// MBC
 		mbc = switch (rom.cartType)
 		{
 			case 0x00, 0x08, 0x09:
-				new NoMBC();
+				// no MBC; base class doesn't actually do anything
+				new MBC();
 			case 0x01, 0x02, 0x03:
 				new MBC1();
 			case 0x05, 0x06:
@@ -71,7 +102,7 @@ class Memory
 			romBanks[i] = new ByteString(0x4000);
 			romBanks[i].readFrom(rom.data);
 		}
-		rom2 = romBanks[1];
+		romBank = 1;
 
 		// set up RAM
 		ramBanks = new Vector(rom.ramBankCount);
@@ -80,7 +111,7 @@ class Memory
 			ramBanks[i] = new ByteString(0x2000);
 			ramBanks[i].fillWith(0);
 		}
-		ram = ramBanks[0];
+		ramBank = 0;
 
 		// real time clock
 		rtc = new RTC();

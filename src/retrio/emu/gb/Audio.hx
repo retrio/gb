@@ -8,8 +8,10 @@ import retrio.emu.gb.sound.*;
 
 
 @:build(retrio.macro.Optimizer.build())
-class Audio
+class Audio implements IState
 {
+	@:stateChildren static var stateChildren = ['ch1', 'ch2', 'ch3', 'ch4'];
+
 	// currently OpenFL on native, like Flash, does not support non-44100 sample rates
 	public static inline var SAMPLE_RATE:Int = 44100;//#if flash 44100 #else 48000 #end;
 	public static inline var NATIVE_SAMPLE_RATE:Int = (456*154*60);
@@ -35,19 +37,19 @@ class Audio
 	}
 	var cycleSkip:Int = NATIVE_SAMPLE_RATIO;
 
-	var vol1:Int = 0;
-	var vol2:Int = 0;
+	@:state var vol1:Int = 0;
+	@:state var vol2:Int = 0;
 
-	var soundEnabled:Bool = false;
+	@:state var soundEnabled:Bool = false;
 
 	var ch1:Channel1;
 	var ch2:Channel1;	// channel 2 is channel 1 without sweep
 	var ch3:Channel3;
 	var ch4:Channel4;
-	var channelsOn1:Vector<Bool> = new Vector(4);
-	var channelsOn2:Vector<Bool> = new Vector(4);
+	@:state var channelsOn1:Vector<Bool> = new Vector(4);
+	@:state var channelsOn2:Vector<Bool> = new Vector(4);
 
-	var cycles:Int = 0;
+	@:state var cycles:Int = 0;
 	var sampleCounter:Int = 0;
 	var sampleSync:Int = 0;
 	var samplesThisFrame:Int = 0;
@@ -293,7 +295,7 @@ class Audio
 			/*--cpu.apuCycles;
 			runCycle();
 			generateSample();*/
-			var runTo = predict();
+			var runTo = Std.int(Math.max(predict(), cpu.apuCycles));
 			cpu.apuCycles -= runTo;
 			for (i in 0 ... runTo) generateSample();
 			for (i in 0 ... runTo) runCycle();
