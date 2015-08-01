@@ -32,9 +32,6 @@ class GBPlugin extends EmulatorPlugin
 	var pixels:ByteArray = new ByteArray();
 	var frameCount = 0;
 	var r = new Rectangle(0, 0, GB.WIDTH, GB.HEIGHT);
-#if encode
-	var encoder = new retrio.audio.WavEncoder();
-#end
 
 	public function new()
 	{
@@ -121,10 +118,6 @@ class GBPlugin extends EmulatorPlugin
 
 	override public function capture()
 	{
-#if encode
-		var outFile = sys.io.File.write("out.wav", true);
-		encoder.encode(outFile);
-#end
 		var capture = new BitmapData(bmpData.width, bmpData.height);
 		capture.copyPixels(bmpData, capture.rect, new flash.geom.Point());
 		return capture;
@@ -135,19 +128,6 @@ class GBPlugin extends EmulatorPlugin
 	{
 		gb.audio.catchUp();
 
-#if encode
-		while (gb.audio.buffer1.length > 0)
-		{
-			encoder.writeSample(Util.clamp(gb.audio.buffer2.pop(), -0xf, 0xf) / 0xf);
-			encoder.writeSample(Util.clamp(gb.audio.buffer1.pop(), -0xf, 0xf) / 0xf);
-		}
-
-		for (i in 0 ... 0x800)
-		{
-			e.data.writeFloat(0);
-			e.data.writeFloat(0);
-		}
-#else
 		var l:Int;
 		if (_buffering)
 		{
@@ -175,11 +155,9 @@ class GBPlugin extends EmulatorPlugin
 			e.data.writeFloat(Util.clamp(gb.audio.buffer2.pop(), -0xf, 0xf) / 0xf);
 			e.data.writeFloat(Util.clamp(gb.audio.buffer1.pop(), -0xf, 0xf) / 0xf);
 		}
-#end
 	}
 
 	override public function setSpeed(speed:EmulationSpeed)
 	{
-		gb.audio.speedMultiplier = speed;
 	}
 }

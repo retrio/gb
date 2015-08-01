@@ -29,12 +29,6 @@ class Audio implements IState
 	public var buffer1:SoundBuffer;		// right output
 	public var buffer2:SoundBuffer;		// left output
 
-	public var speedMultiplier(default, set):Float = 1;
-	function set_speedMultiplier(s:Float)
-	{
-		cycleSkip = Std.int(NATIVE_SAMPLE_RATIO * speedMultiplier);
-		return speedMultiplier = s;
-	}
 	var cycleSkip:Int = NATIVE_SAMPLE_RATIO;
 
 	@:state var vol1:Int = 0;
@@ -95,6 +89,8 @@ class Audio implements IState
 
 	public inline function read(addr:Int):Int
 	{
+		catchUp();
+
 		switch (addr)
 		{
 			case 0xff10:
@@ -295,41 +291,41 @@ class Audio implements IState
 			/*--cpu.apuCycles;
 			runCycle();
 			generateSample();*/
-			var runTo = Std.int(Math.max(predict(), cpu.apuCycles));
+			var runTo = Std.int(Math.min(predict(), cpu.apuCycles));
 			cpu.apuCycles -= runTo;
 			for (i in 0 ... runTo) generateSample();
-			for (i in 0 ... runTo) runCycle();
+			subCycles -= runTo;
+			while (subCycles < 0)
+			{
+				subCycles += SEQUENCER_RATE;
+				runCycle();
+			}
 		}
 	}
 
 	inline function predict()
 	{
-		return subCycles;
+		return Std.int(Math.max(subCycles, 1));
 	}
 
 	var subCycles:Int = SEQUENCER_RATE;
 	inline function runCycle()
 	{
-		--subCycles;
-		if (subCycles == 0)
+		switch (cycles++)
 		{
-			switch (cycles++)
-			{
-				case 0:
-					lengthClock();
-				case 2:
-					lengthClock();
-					sweepClock();
-				case 4:
-					lengthClock();
-				case 6:
-					lengthClock();
-					sweepClock();
-				case 7:
-					envelopeClock();
-					cycles = 0;
-			}
-			subCycles = SEQUENCER_RATE;
+			case 0:
+				lengthClock();
+			case 2:
+				lengthClock();
+				sweepClock();
+			case 4:
+				lengthClock();
+			case 6:
+				lengthClock();
+				sweepClock();
+			case 7:
+				envelopeClock();
+				cycles = 0;
 		}
 	}
 

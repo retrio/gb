@@ -1,13 +1,12 @@
 package retrio.emu.gb;
 
-import haxe.Serializer;
 import haxe.ds.Vector;
 import haxe.io.BytesInput;
-import haxe.io.Output;
 
 
 class GB implements IEmulator implements IState
 {
+	@:stateVersion static var stateVersion = 1;
 	@:stateChildren static var stateChildren = ['cpu', 'memory', 'rom', 'video', 'audio'];
 
 	public static inline var WIDTH:Int = 160;
@@ -41,28 +40,30 @@ class GB implements IEmulator implements IState
 	public function loadGame(gameData:FileWrapper, ?useSram:Bool=true)
 	{
 		rom = new ROM(gameData);
-
 		memory = new Memory(rom);
+
+		reset();
+
+		romName = gameData.name;
+		this.useSram = useSram;
+	}
+
+	public function reset():Void
+	{
 		cpu = new CPU();
 		video = new Video();
 		audio = new Audio();
 		palette = new Palette();
 
-		cpu.init(memory, video, audio);
-		video.init(cpu, memory);
-		audio.init(cpu, memory);
-		memory.init(cpu, video, audio, controllers);
-
 		buffer = video.screenBuffer;
 
-		romName = gameData.name;
-		this.useSram = useSram;
-		if (useSram) loadSram();
-	}
+		memory.init(cpu, video, audio, controllers);
+		video.init(cpu, memory);
+		audio.init(cpu, memory);
+		cpu.init(memory, video, audio);
+		memory.writeInitialState();
 
-	public function reset():Void
-	{
-		//cpu.reset(this);
+		if (useSram) loadSram();
 	}
 
 	public function frame()

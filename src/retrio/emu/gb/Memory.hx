@@ -65,16 +65,12 @@ class Memory implements IState
 
 		// initial memory allocation
 		hram = new ByteString(0x200);
-		hram.fillWith(0);
 
 		wramBanks = new Vector(8);
 		for (i in 0 ... 8)
 		{
 			wramBanks[i] = new ByteString(0x1000);
-			wramBanks[i].fillWith(0);
 		}
-		wram1Bank = 0;
-		wram2Bank = 1;
 
 		// MBC
 		mbc = switch (rom.cartType)
@@ -102,16 +98,13 @@ class Memory implements IState
 			romBanks[i] = new ByteString(0x4000);
 			romBanks[i].readFrom(rom.data);
 		}
-		romBank = 1;
 
 		// set up RAM
 		ramBanks = new Vector(rom.ramBankCount);
 		for (i in 0 ... rom.ramBankCount)
 		{
 			ramBanks[i] = new ByteString(0x2000);
-			ramBanks[i].fillWith(0);
 		}
-		ramBank = 0;
 
 		// real time clock
 		rtc = new RTC();
@@ -124,10 +117,21 @@ class Memory implements IState
 		this.audio = audio;
 		this.controllers = controllers;
 
+		hram.fillWith(0);
+
+		for (i in 0 ... wramBanks.length) wramBanks[i].fillWith(0);
+		for (i in 0 ... ramBanks.length) ramBanks[i].fillWith(0);
+
+		romBank = 1;
+		wram1Bank = 0;
+		wram2Bank = 1;
+		ramBank = 0;
+	}
+
+	public function writeInitialState()
+	{
 		for (key in _regs.keys())
-		{
 			write(key, _regs[key]);
-		}
 	}
 
 	public function read(addr:Int):Int
