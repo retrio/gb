@@ -136,7 +136,7 @@ class Memory implements IState
 
 	public function read(addr:Int):Int
 	{
-		switch (addr & 0xF000)
+		switch (addr & 0xf000)
 		{
 			case 0x0000, 0x1000, 0x2000, 0x3000:
 				return rom1[addr];
@@ -190,7 +190,7 @@ class Memory implements IState
 
 	public function write(addr:Int, value:Int):Void
 	{
-		switch (addr & 0xF000)
+		switch (addr & 0xf000)
 		{
 			case 0x0000, 0x1000, 0x2000, 0x3000,
 					0x4000, 0x5000, 0x6000, 0x7000:
