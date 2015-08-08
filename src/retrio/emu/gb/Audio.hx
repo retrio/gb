@@ -18,9 +18,7 @@ class Audio implements IState
 	public static inline var NATIVE_SAMPLE_RATIO:Int = 4;
 	static inline var SEQUENCER_RATE = 8230;			// 456*154*60/8/64
 	static inline var BUFFER_LENGTH:Int = 0x8000;
-	static inline var MAX_VOLUME:Int = 8;
-	// TODO: this shouldn't be defined here
-	static inline var FRAME_RATE = 60;
+	static inline var MAX_VOLUME:Int = 16;
 	static inline var FILTER_ORDER = #if flash 63 #else 1023 #end;
 
 	public var cpu:CPU;
@@ -28,6 +26,8 @@ class Audio implements IState
 
 	public var buffer1:SoundBuffer;		// right output
 	public var buffer2:SoundBuffer;		// left output
+
+	public var frameRate:Int = 60;
 
 	var cycleSkip:Int = NATIVE_SAMPLE_RATIO;
 
@@ -82,8 +82,9 @@ class Audio implements IState
 		this.memory = memory;
 	}
 
-	public function newFrame()
+	public function newFrame(frameRate:Int)
 	{
+		this.frameRate = frameRate;
 		samplesThisFrame -= SAMPLE_RATE;
 	}
 
@@ -382,7 +383,7 @@ class Audio implements IState
 					}
 					else
 					{
-						samplesThisFrame += FRAME_RATE;
+						samplesThisFrame += frameRate;
 
 						buffer1.push(Util.lerp(s1prev, filter1.getSample(), t) / MAX_VOLUME);
 						buffer2.push(Util.lerp(s2prev, filter2.getSample(), t) / MAX_VOLUME);

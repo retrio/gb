@@ -87,8 +87,13 @@ class GBPlugin extends EmulatorPlugin
 			}
 
 			pixels.position = 0;
+
+			bmpData.lock();
+			canvas.lock();
 			bmpData.setPixels(r, pixels);
 			canvas.draw(bmpData, m);
+			canvas.unlock();
+			bmpData.unlock();
 		}
 	}
 

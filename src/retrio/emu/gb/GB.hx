@@ -66,9 +66,13 @@ class GB implements IEmulator implements IState
 		if (useSram) loadSram();
 	}
 
+	var _time:Float = 0;
 	public function frame()
 	{
-		audio.newFrame();
+		var _newTime = haxe.Timer.stamp();
+		var elapsed = _newTime - _time;
+		_time = _newTime;
+		audio.newFrame(Math.ceil(1/elapsed));
 		cpu.runFrame();
 
 		if (memory.sramDirty)
