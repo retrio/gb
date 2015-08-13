@@ -124,7 +124,7 @@ class GBPlugin extends EmulatorPlugin
 	{
 		canvas = new BitmapData(width, height, false, 0);
 		bmp = new Bitmap(canvas);
-		addChild(bmp);
+		addChildAt(bmp, 0);
 
 		var sx = canvas.width / GB.WIDTH, sy = canvas.height / (GB.HEIGHT);
 		m.setTo(sx, 0, 0, sy, 0, 0);
