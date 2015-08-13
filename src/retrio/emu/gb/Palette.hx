@@ -5,12 +5,13 @@ import haxe.ds.Vector;
 
 typedef PaletteInfo =
 {
-	?name:String,
+	name:String,
 	colors:Array<Int>,
 }
 
 class Palette
 {
+	public static var paletteMap:Map<String, Vector<Int>>;
 	public static var paletteInfo:Array<PaletteInfo> = [
 		{colors: [0xffffff, 0xc0c0c0, 0x606060, 0x000000], name: "default"},
 		{colors: [0x9cba29, 0x8cab26, 0x326132, 0x113711], name: "classic green"},
@@ -30,7 +31,6 @@ class Palette
 	];
 
 	static var palettes:Vector<Vector<Int>> = getColors();
-	static var paletteMap:Map<String, Vector<Int>>;
 
 	static function getColors():Vector<Vector<Int>>
 	{

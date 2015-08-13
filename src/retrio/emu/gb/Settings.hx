@@ -1,9 +1,14 @@
 package retrio.emu.gb;
 
 
-class Settings
+@:enum
+abstract Settings(String) from String to String
 {
-	public static var settings = [
-		{name:"Palette", type:Options([])},
-	];
+	var GBPalette = "Palette (GB)";
+
+	public static var settings:Array<SettingCategory> = [{
+		name: 'GB', settings: [
+			new Setting(GBPalette, SettingType.Options([for (p in Palette.paletteInfo) p.name]), "default"),
+		]
+	}];
 }
