@@ -69,7 +69,7 @@ class Channel1 implements ISoundGenerator implements IState
 
 	@:state var cycleLengthNumerator:Int = 1;
 	@:state var cycleLengthDenominator:Int = 1;
-	@:state var cyclePos:Int = 0;
+	@:state var cyclePos:Float = 0;
 	@:state var dutyLength:Int = 1;
 	@:state public var amplitude:Int = 0;
 
@@ -216,12 +216,12 @@ class Channel1 implements ISoundGenerator implements IState
 		}
 	}
 
-	public inline function play():Int
+	public inline function play(rate:Float):Int
 	{
 		var val = 0;
 		if (enabled)
 		{
-			cyclePos += (cycleLengthDenominator * Audio.NATIVE_SAMPLE_RATIO);
+			cyclePos += (cycleLengthDenominator * Audio.NATIVE_SAMPLE_RATIO) * rate;
 			if (cyclePos >= cycleLengthNumerator) cyclePos -= cycleLengthNumerator;
 			val = (cachedDuty[Std.int(cyclePos / dutyLength) & 0x7]) ? amplitude : -amplitude;
 		}

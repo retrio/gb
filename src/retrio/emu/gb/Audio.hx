@@ -19,7 +19,7 @@ class Audio implements IState
 	static inline var SEQUENCER_RATE = 8230;			// 456*154*60/8/64
 	static inline var BUFFER_LENGTH:Int = 0x8000;
 	static inline var MAX_VOLUME:Int = 16;
-	static inline var FILTER_ORDER = #if flash 63 #else 1023 #end;
+	static inline var FILTER_ORDER = 63;
 
 	public var cpu:CPU;
 	public var memory:Memory;
@@ -27,7 +27,7 @@ class Audio implements IState
 	public var buffer1:SoundBuffer;		// right output
 	public var buffer2:SoundBuffer;		// left output
 
-	public var frameRate:Int = 60;
+	var playRate:Float = 1;
 
 	var cycleSkip:Int = NATIVE_SAMPLE_RATIO;
 
@@ -45,8 +45,8 @@ class Audio implements IState
 
 	@:state var cycles:Int = 0;
 	var sampleCounter:Int = 0;
-	var sampleSync:Int = 0;
-	var samplesThisFrame:Int = 0;
+	var sampleSync:Float = 0;
+	var sampleStepSize:Float = SAMPLE_RATE * NATIVE_SAMPLE_RATIO;
 
 	// sample data for interpolation
 	var s1:Float = 0;
@@ -82,10 +82,10 @@ class Audio implements IState
 		this.memory = memory;
 	}
 
-	public function newFrame(frameRate:Int)
+	public function newFrame(rate:Float)
 	{
-		this.frameRate = frameRate;
-		samplesThisFrame -= SAMPLE_RATE;
+		playRate = 60/rate;
+		sampleStepSize = SAMPLE_RATE * NATIVE_SAMPLE_RATIO * playRate;
 	}
 
 	public inline function read(addr:Int):Int
@@ -356,7 +356,7 @@ class Audio implements IState
 		if (++sampleCounter >= cycleSkip)
 		{
 			sampleCounter -= cycleSkip;
-			sampleSync += SAMPLE_RATE * NATIVE_SAMPLE_RATIO;
+			sampleSync += sampleStepSize;
 
 			if (soundEnabled)
 			{
@@ -371,29 +371,21 @@ class Audio implements IState
 			filter1.addSample(s1);
 			filter2.addSample(s2);
 
-			if (NATIVE_SAMPLE_RATE - sampleSync < SAMPLE_RATE * NATIVE_SAMPLE_RATIO)
+			if (NATIVE_SAMPLE_RATE - sampleSync < sampleStepSize)
 			{
-				if (samplesThisFrame < SAMPLE_RATE)
+				if (t == null)
 				{
-					if (t == null)
-					{
-						s1prev = filter1.getSample();
-						s2prev = filter2.getSample();
-						t = (NATIVE_SAMPLE_RATE - sampleSync) / (SAMPLE_RATE * NATIVE_SAMPLE_RATIO);
-					}
-					else
-					{
-						samplesThisFrame += frameRate;
-
-						buffer1.push(Util.lerp(s1prev, filter1.getSample(), t) / MAX_VOLUME);
-						buffer2.push(Util.lerp(s2prev, filter2.getSample(), t) / MAX_VOLUME);
-
-						sampleSync -= NATIVE_SAMPLE_RATE;
-					}
+					s1prev = filter1.getSample();
+					s2prev = filter2.getSample();
+					t = (NATIVE_SAMPLE_RATE - sampleSync) / sampleStepSize;
 				}
 				else
 				{
+					buffer1.push(Util.lerp(s1prev, filter1.getSample(), t) / MAX_VOLUME);
+					buffer2.push(Util.lerp(s2prev, filter2.getSample(), t) / MAX_VOLUME);
+
 					sampleSync -= NATIVE_SAMPLE_RATE;
+					t = null;
 				}
 			}
 		}
@@ -405,19 +397,19 @@ class Audio implements IState
 
 		if (channelsOn1[0])
 		{
-			s1 += _samples[0] = ch1.play();
+			s1 += _samples[0] = ch1.play(playRate);
 		}
 		if (channelsOn1[1])
 		{
-			s1 += _samples[1] = ch2.play();
+			s1 += _samples[1] = ch2.play(playRate);
 		}
 		if (channelsOn1[2])
 		{
-			s1 += _samples[2] = ch3.play();
+			s1 += _samples[2] = ch3.play(playRate);
 		}
 		if (channelsOn1[3])
 		{
-			s1 += _samples[3] = ch4.play();
+			s1 += _samples[3] = ch4.play(playRate);
 		}
 
 		s1 *= vol1;
@@ -429,19 +421,19 @@ class Audio implements IState
 
 		if (channelsOn2[0])
 		{
-			s2 += channelsOn1[0] ? _samples[0] : ch1.play();
+			s2 += channelsOn1[0] ? _samples[0] : ch1.play(playRate);
 		}
 		if (channelsOn2[1])
 		{
-			s2 += channelsOn1[1] ? _samples[1] : ch2.play();
+			s2 += channelsOn1[1] ? _samples[1] : ch2.play(playRate);
 		}
 		if (channelsOn2[2])
 		{
-			s2 += channelsOn1[2] ? _samples[2] : ch3.play();
+			s2 += channelsOn1[2] ? _samples[2] : ch3.play(playRate);
 		}
 		if (channelsOn2[3])
 		{
-			s2 += channelsOn1[3] ? _samples[3] : ch4.play();
+			s2 += channelsOn1[3] ? _samples[3] : ch4.play(playRate);
 		}
 
 		s2 *= vol2;

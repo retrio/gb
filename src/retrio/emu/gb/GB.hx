@@ -29,7 +29,9 @@ class GB implements IEmulator implements IState
 	public var audio:Audio;
 
 	public var controllers:Vector<GBController> = new Vector(2);
-	public var palette:Palette;
+	public var palette:Palette = new Palette();
+
+	public var settings:Array<SettingCategory> = GlobalSettings.settings.concat(Settings.settings);
 
 	var _saveCounter:Int = 0;
 	@:state var romName:String;
@@ -53,7 +55,6 @@ class GB implements IEmulator implements IState
 		cpu = new CPU();
 		video = new Video();
 		audio = new Audio();
-		palette = new Palette();
 
 		buffer = video.screenBuffer;
 
@@ -66,13 +67,9 @@ class GB implements IEmulator implements IState
 		if (useSram) loadSram();
 	}
 
-	var _time:Float = 0;
-	public function frame()
+	public function frame(rate:Float)
 	{
-		var _newTime = haxe.Timer.stamp();
-		var elapsed = _newTime - _time;
-		_time = _newTime;
-		audio.newFrame(Math.ceil(1/elapsed));
+		audio.newFrame(rate);
 		cpu.runFrame();
 
 		if (memory.sramDirty)

@@ -12,12 +12,14 @@ import flash.geom.Matrix;
 import flash.utils.ByteArray;
 import flash.utils.Endian;
 import retrio.emu.gb.GB;
+import retrio.emu.gb.Settings;
 import retrio.emu.gb.Palette;
 
 
 @:access(retrio.emu.gb.GB)
 class GBPlugin extends EmulatorPlugin
 {
+	static inline var AUDIO_BUFFER_SIZE:Int = 0x800;
 	static var _registered = Shell.registerPlugin("gb", new GBPlugin());
 
 	var _stage(get, never):flash.display.Stage;
@@ -32,11 +34,13 @@ class GBPlugin extends EmulatorPlugin
 	var pixels:ByteArray = new ByteArray();
 	var frameCount = 0;
 	var r = new Rectangle(0, 0, GB.WIDTH, GB.HEIGHT);
+	var screenDirty:Bool = false;
 
 	public function new()
 	{
 		super();
 		this.emu = this.gb = new GB();
+		this.settings = emu.settings;
 		extensions = gb.extensions;
 
 		bmpData = new BitmapData(GB.WIDTH, GB.HEIGHT, false, 0);
@@ -69,17 +73,20 @@ class GBPlugin extends EmulatorPlugin
 
 		if (running)
 		{
-			gb.frame();
+			super.frame();
+			gb.frame(frameRate);
 
 			if (!gb.video.finished) return;
 
 			if (frameSkip > 0)
 			{
-				var skip = frameCount > 0;
 				frameCount = (frameCount + 1) % (frameSkip + 1);
-				if (skip) return;
+				if (frameCount > 0) return;
 			}
+		}
 
+		if (running || screenDirty)
+		{
 			var bm = gb.buffer;
 			for (i in 0 ... GB.WIDTH * GB.HEIGHT)
 			{
@@ -91,9 +98,11 @@ class GBPlugin extends EmulatorPlugin
 			bmpData.lock();
 			canvas.lock();
 			bmpData.setPixels(r, pixels);
-			canvas.draw(bmpData, m);
+			canvas.draw(bmpData, m, null, null, null, smooth);
 			canvas.unlock();
 			bmpData.unlock();
+
+			screenDirty = false;
 		}
 	}
 
@@ -106,6 +115,8 @@ class GBPlugin extends EmulatorPlugin
 	override public function deactivate()
 	{
 		super.deactivate();
+		gb.audio.buffer1.clear();
+		gb.audio.buffer2.clear();
 		gb.saveSram();
 	}
 
@@ -136,14 +147,14 @@ class GBPlugin extends EmulatorPlugin
 		var l:Int;
 		if (_buffering)
 		{
-			l = Std.int(Math.max(0, 0x800 - gb.audio.buffer1.length));
+			l = Std.int(Math.max(0, AUDIO_BUFFER_SIZE * 2 - gb.audio.buffer1.length));
 			if (l <= 0) _buffering = false;
-			else l = 0x800;
+			else l = AUDIO_BUFFER_SIZE;
 		}
 		else
 		{
 			// not enough samples; buffer until more arrive
-			l = Std.int(Math.max(0, 0x800 - gb.audio.buffer1.length));
+			l = Std.int(Math.max(0, AUDIO_BUFFER_SIZE - gb.audio.buffer1.length));
 			if (l > 0)
 			{
 				_buffering = true;
@@ -155,14 +166,23 @@ class GBPlugin extends EmulatorPlugin
 			e.data.writeDouble(0);
 		}
 
-		for (i in l ... 0x800)
+		for (i in l ... AUDIO_BUFFER_SIZE)
 		{
-			e.data.writeFloat(Util.clamp(gb.audio.buffer2.pop(), -0xf, 0xf) / 0xf);
-			e.data.writeFloat(Util.clamp(gb.audio.buffer1.pop(), -0xf, 0xf) / 0xf);
+			e.data.writeFloat(volume * Util.clamp(gb.audio.buffer2.pop(), -0xf, 0xf) / 0xf);
+			e.data.writeFloat(volume * Util.clamp(gb.audio.buffer1.pop(), -0xf, 0xf) / 0xf);
 		}
 	}
 
-	override public function setSpeed(speed:EmulationSpeed)
+	override public function setSetting(name:String, value:Dynamic):Void
 	{
+		switch (name)
+		{
+			case Settings.GBPalette:
+				gb.palette.swapPalettes(Std.string(value));
+				screenDirty = true;
+
+			default:
+				super.setSetting(name, value);
+		}
 	}
 }
