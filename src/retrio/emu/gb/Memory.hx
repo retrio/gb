@@ -14,7 +14,7 @@ class Memory implements IState
 	public var video:Video;
 	public var audio:Audio;
 	public var rtc:RTC;
-	public var controllers:Vector<GBController>;
+	public var controller:GBController;
 
 	public var ram:ByteString;				// pointer to external RAM
 	public var wram1:ByteString;			// pointer to fixed work RAM
@@ -110,12 +110,12 @@ class Memory implements IState
 		rtc = new RTC();
 	}
 
-	public function init(cpu:CPU, video:Video, audio:Audio, controllers:Vector<GBController>)
+	public function init(cpu:CPU, video:Video, audio:Audio, controller:GBController)
 	{
 		this.cpu = cpu;
 		this.video = video;
 		this.audio = audio;
-		this.controllers = controllers;
+		this.controller = controller;
 
 		hram.fillWith(0);
 
@@ -251,7 +251,6 @@ class Memory implements IState
 		switch (addr)
 		{
 			case 0xff00:
-				var controller = controllers[0];
 				return controller == null ? 0 : controller.buttons();
 			case 0xff04:
 				var result = (cpu.divTicks >> 8) & 0xff;
@@ -277,7 +276,6 @@ class Memory implements IState
 		switch(addr)
 		{
 			case 0xff00:
-				var controller = controllers[0];
 				if (controller != null)
 				{
 					controller.directionsEnabled = !Util.getbit(value, 4);

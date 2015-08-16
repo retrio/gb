@@ -1,5 +1,6 @@
 package retrio.ui.openfl;
 
+import haxe.ds.Vector;
 import flash.Lib;
 import flash.Memory;
 import flash.display.Sprite;
@@ -39,8 +40,15 @@ class GBPlugin extends EmulatorPlugin
 	public function new()
 	{
 		super();
+
+		controllers = new Vector(1);
+
 		this.emu = this.gb = new GB();
-		this.settings = emu.settings;
+		this.settings = GlobalSettings.settings.concat(
+			retrio.emu.gb.Settings.settings
+		).concat(
+			GBControls.settings(this)
+		);
 		extensions = gb.extensions;
 
 		bmpData = new BitmapData(GB.WIDTH, GB.HEIGHT, false, 0);
@@ -180,6 +188,15 @@ class GBPlugin extends EmulatorPlugin
 			case Settings.GBPalette:
 				gb.palette.swapPalettes(Std.string(value));
 				screenDirty = true;
+
+			case Settings.Ch1Volume:
+				if (gb != null && gb.audio != null) gb.audio.ch1vol = cast(value, Int) / 100;
+			case Settings.Ch2Volume:
+				if (gb != null && gb.audio != null) gb.audio.ch2vol = cast(value, Int) / 100;
+			case Settings.Ch3Volume:
+				if (gb != null && gb.audio != null) gb.audio.ch3vol = cast(value, Int) / 100;
+			case Settings.Ch4Volume:
+				if (gb != null && gb.audio != null) gb.audio.ch4vol = cast(value, Int) / 100;
 
 			default:
 				super.setSetting(name, value);

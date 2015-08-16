@@ -52,6 +52,11 @@ class Channel1 implements ISoundGenerator implements IState
 	@:state var envelopeOn:Bool = false;
 
 	@:state public var repeat:Bool = true;
+	@:state public var baseFrequency(default, set):Int = 0;
+	inline function set_baseFrequency(f:Int)
+	{
+		return baseFrequency = frequency = f;
+	}
 	@:state public var frequency(default, set):Int = 0;
 	inline function set_frequency(f:Int)
 	{
@@ -60,11 +65,6 @@ class Channel1 implements ISoundGenerator implements IState
 		cycleLengthDenominator = Std.int(0x20000/64);
 		dutyLength = Std.int(cycleLengthNumerator / 8);
 		return frequency = f;
-	}
-	@:state public var baseFrequency(default, set):Int = 0;
-	inline function set_baseFrequency(f:Int)
-	{
-		return baseFrequency = frequency = f;
 	}
 
 	@:state var cycleLengthNumerator:Int = 1;

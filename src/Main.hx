@@ -2,7 +2,7 @@ import retrio.FileWrapper;
 import retrio.ui.openfl.GBPlugin;
 import retrio.ui.openfl.Shell;
 import retrio.ui.openfl.controllers.KeyboardController;
-import retrio.emu.gb.Button;
+import retrio.emu.gb.GBControllerButton;
 
 
 class Main extends retrio.ui.openfl.Shell
@@ -44,22 +44,14 @@ class Main extends retrio.ui.openfl.Shell
 	{
 		super.onStage(e);
 
-		var controller = new KeyboardController();
+		KeyboardController.init();
 
-		var keyDefaults:Map<Button, Int> = [
-			Button.A => 76,
-			Button.B => 75,
-			Button.Select => 9,
-			Button.Start => 13,
-			Button.Up => 87,
-			Button.Down => 83,
-			Button.Left => 65,
-			Button.Right => 68
-		];
+		var controller = new KeyboardController();
+		var keyDefaults = retrio.ui.openfl.GBControls.defaultBindings[KeyboardController.name];
 		for (btn in keyDefaults.keys())
-			controller.defineKey(keyDefaults[btn], btn);
+			controller.define(keyDefaults[btn], btn);
 
 		loadPlugin("gb");
-		addController(controller);
+		addController(controller, 0);
 	}
 }

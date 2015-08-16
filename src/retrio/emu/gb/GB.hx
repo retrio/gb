@@ -1,6 +1,5 @@
 package retrio.emu.gb;
 
-import haxe.ds.Vector;
 import haxe.io.BytesInput;
 
 
@@ -27,17 +26,19 @@ class GB implements IEmulator implements IState
 	public var rom:ROM;
 	public var video:Video;
 	public var audio:Audio;
-
-	public var controllers:Vector<GBController> = new Vector(2);
 	public var palette:Palette = new Palette();
 
-	public var settings:Array<SettingCategory> = GlobalSettings.settings.concat(Settings.settings);
+	public var maxControllers:Int = 1;
+	public var controller:GBController;
 
 	var _saveCounter:Int = 0;
 	@:state var romName:String;
 	@:state var useSram:Bool = true;
 
-	public function new() {}
+	public function new()
+	{
+		controller = new GBController();
+	}
 
 	public function loadGame(gameData:FileWrapper, ?useSram:Bool=true)
 	{
@@ -58,7 +59,7 @@ class GB implements IEmulator implements IState
 
 		buffer = video.screenBuffer;
 
-		memory.init(cpu, video, audio, controllers);
+		memory.init(cpu, video, audio, controller);
 		video.init(cpu, memory);
 		audio.init(cpu, memory);
 		cpu.init(memory, video, audio);
@@ -86,29 +87,14 @@ class GB implements IEmulator implements IState
 		else _saveCounter = 0;
 	}
 
-	public function addController(controller:IController, ?port:Int=null):Null<Int>
+	public function addController(controller:IController, port:Int)
 	{
-		if (port == null)
-		{
-			for (i in 0 ... controllers.length)
-			{
-				if (controllers[i] == null)
-				{
-					port = i;
-					break;
-				}
-			}
-			if (port == null) return null;
-		}
-		else
-		{
-			if (controllers[port] != null) return null;
-		}
+		this.controller.controller = controller;
+	}
 
-		controllers[port] = new GBController(controller);
-		controller.init(this);
-
-		return port;
+	public function removeController(port:Int)
+	{
+		controller.controller = null;
 	}
 
 	public function getColor(c:Int)

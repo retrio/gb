@@ -177,7 +177,7 @@ class CPU implements IState
 			}
 		}
 
-		var controller = memory.controllers[0];
+		var controller = memory.controller;
 		if (controller != null && controller.changed)
 		{
 			controller.changed = false;

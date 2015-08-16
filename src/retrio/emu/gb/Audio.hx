@@ -27,6 +27,11 @@ class Audio implements IState
 	public var buffer1:SoundBuffer;		// right output
 	public var buffer2:SoundBuffer;		// left output
 
+	public var ch1vol:Float = 1;
+	public var ch2vol:Float = 1;
+	public var ch3vol:Float = 1;
+	public var ch4vol:Float = 1;
+
 	var playRate:Float = 1;
 
 	var cycleSkip:Int = NATIVE_SAMPLE_RATIO;
@@ -350,7 +355,7 @@ class Audio implements IState
 		ch4.envelopeClock();
 	}
 
-	var _samples:Vector<Int> = new Vector(4);
+	var _samples:Vector<Float> = new Vector(4);
 	inline function generateSample()
 	{
 		if (++sampleCounter >= cycleSkip)
@@ -397,19 +402,19 @@ class Audio implements IState
 
 		if (channelsOn1[0])
 		{
-			s1 += _samples[0] = ch1.play(playRate);
+			s1 += _samples[0] = ch1.play(playRate) * ch1vol;
 		}
 		if (channelsOn1[1])
 		{
-			s1 += _samples[1] = ch2.play(playRate);
+			s1 += _samples[1] = ch2.play(playRate) * ch2vol;
 		}
 		if (channelsOn1[2])
 		{
-			s1 += _samples[2] = ch3.play(playRate);
+			s1 += _samples[2] = ch3.play(playRate) * ch3vol;
 		}
 		if (channelsOn1[3])
 		{
-			s1 += _samples[3] = ch4.play(playRate);
+			s1 += _samples[3] = ch4.play(playRate) * ch4vol;
 		}
 
 		s1 *= vol1;
@@ -421,19 +426,19 @@ class Audio implements IState
 
 		if (channelsOn2[0])
 		{
-			s2 += channelsOn1[0] ? _samples[0] : ch1.play(playRate);
+			s2 += channelsOn1[0] ? _samples[0] : (ch1.play(playRate) * ch1vol);
 		}
 		if (channelsOn2[1])
 		{
-			s2 += channelsOn1[1] ? _samples[1] : ch2.play(playRate);
+			s2 += channelsOn1[1] ? _samples[1] : (ch2.play(playRate) * ch2vol);
 		}
 		if (channelsOn2[2])
 		{
-			s2 += channelsOn1[2] ? _samples[2] : ch3.play(playRate);
+			s2 += channelsOn1[2] ? _samples[2] : (ch3.play(playRate) * ch3vol);
 		}
 		if (channelsOn2[3])
 		{
-			s2 += channelsOn1[3] ? _samples[3] : ch4.play(playRate);
+			s2 += channelsOn1[3] ? _samples[3] : (ch4.play(playRate) * ch4vol);
 		}
 
 		s2 *= vol2;
