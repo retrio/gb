@@ -7,7 +7,7 @@ import retrio.ui.openfl.controllers.*;
 
 class GBControls
 {
-	public static var controllerImg:String = "graphics/controllers/gb.png";
+	public static var controllerImg:String = "graphics/gb_controls.png";
 
 	// String because Class<IController> can't be used as a map key
 	public static var defaultBindings:Map<String, Map<Int, Int>> = [
