@@ -1,5 +1,6 @@
 package retrio.ui.openfl;
 
+import retrio.config.SettingCategory;
 import retrio.emu.gb.GBControllerButton;
 import retrio.ui.haxeui.ControllerSettingsPage;
 import retrio.ui.openfl.controllers.*;

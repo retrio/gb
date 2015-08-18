@@ -1,5 +1,8 @@
 package retrio.emu.gb;
 
+import retrio.config.Setting;
+import retrio.config.SettingCategory;
+
 
 @:enum
 abstract Settings(String) from String to String
@@ -14,7 +17,7 @@ abstract Settings(String) from String to String
 	public static var settings:Array<SettingCategory> = [
 		{
 			id: "gb", name: 'GB', settings: [
-				new Setting(GBPalette, "Palette (GB)", SettingType.Options([for (p in Palette.paletteInfo) p.name]), "default"),
+				new Setting(GBPalette, "Palette (GB)", Options([for (p in Palette.paletteInfo) p.name]), "default"),
 			]
 		},
 		{
