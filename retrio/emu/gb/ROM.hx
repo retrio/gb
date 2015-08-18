@@ -1,6 +1,7 @@
 package retrio.emu.gb;
 
 import haxe.ds.Vector;
+import retrio.io.FileWrapper;
 
 
 class ROM implements IState

@@ -181,9 +181,9 @@ class GBPlugin extends EmulatorPlugin
 		}
 	}
 
-	override public function setSetting(name:String, value:Dynamic):Void
+	override public function setSetting(id:String, value:Dynamic):Void
 	{
-		switch (name)
+		switch (id)
 		{
 			case Settings.GBPalette:
 				gb.palette.swapPalettes(Std.string(value));
@@ -199,7 +199,7 @@ class GBPlugin extends EmulatorPlugin
 				if (gb != null && gb.audio != null) gb.audio.ch4vol = cast(value, Int) / 100;
 
 			default:
-				super.setSetting(name, value);
+				super.setSetting(id, value);
 		}
 	}
 }

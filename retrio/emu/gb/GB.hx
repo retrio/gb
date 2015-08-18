@@ -1,6 +1,8 @@
 package retrio.emu.gb;
 
 import haxe.io.BytesInput;
+import retrio.io.FileWrapper;
+import retrio.io.IEnvironment;
 
 
 class GB implements IEmulator implements IState
@@ -107,7 +109,9 @@ class GB implements IEmulator implements IState
 		if (io != null)
 		{
 			var state = saveState();
-			io.writeBytesToFile(romName + ".st" + slot, state);
+			var file = io.writeFile();
+			file.writeBytes(state);
+			file.save(romName + ".st" + slot);
 		}
 	}
 
@@ -126,7 +130,9 @@ class GB implements IEmulator implements IState
 	{
 		if (useSram && rom.hasSram && memory.sramDirty && io != null)
 		{
-			io.writeVectorToFile(romName + ".srm", memory.ramBanks);
+			var file = io.writeFile();
+			file.writeVector(memory.ramBanks);
+			file.save(romName + ".srm");
 			memory.sramDirty = false;
 			_saveCounter = 0;
 		}

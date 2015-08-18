@@ -4,25 +4,25 @@ package retrio.emu.gb;
 @:enum
 abstract Settings(String) from String to String
 {
-	var GBPalette = "Palette (GB)";
+	var GBPalette = "gbpalette";
 
-	var Ch1Volume = "Square 1";
-	var Ch2Volume = "Square 2";
-	var Ch3Volume = "Sample";
-	var Ch4Volume = "Noise";
+	var Ch1Volume = "ch1";
+	var Ch2Volume = "ch2";
+	var Ch3Volume = "ch3";
+	var Ch4Volume = "ch4";
 
 	public static var settings:Array<SettingCategory> = [
 		{
-			name: 'GB', settings: [
-				new Setting(GBPalette, SettingType.Options([for (p in Palette.paletteInfo) p.name]), "default"),
+			id: "gb", name: 'GB', settings: [
+				new Setting(GBPalette, "Palette (GB)", SettingType.Options([for (p in Palette.paletteInfo) p.name]), "default"),
 			]
 		},
 		{
-			name: 'GB Audio', settings: [
-				new Setting(Ch1Volume, IntValue(0,100), 100),
-				new Setting(Ch2Volume, IntValue(0,100), 100),
-				new Setting(Ch3Volume, IntValue(0,100), 100),
-				new Setting(Ch4Volume, IntValue(0,100), 100),
+			id: "gbaudio", name: 'GB Audio', settings: [
+				new Setting(Ch1Volume, "Square 1", IntValue(0,100), 100),
+				new Setting(Ch2Volume, "Square 2", IntValue(0,100), 100),
+				new Setting(Ch3Volume, "Noise", IntValue(0,100), 100),
+				new Setting(Ch4Volume, "Sample", IntValue(0,100), 100),
 			]
 		},
 	];

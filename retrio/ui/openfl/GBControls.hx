@@ -28,7 +28,7 @@ class GBControls
 	public static function settings(plugin:GBPlugin):Array<SettingCategory>
 	{
 		return [
-			{name: "Controls", custom: {
+			{id: "controls", name: "Controls", custom: {
 				render:ControllerSettingsPage.render.bind(
 					plugin,
 					controllerImg,
