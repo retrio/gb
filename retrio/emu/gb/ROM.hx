@@ -7,14 +7,14 @@ import retrio.io.FileWrapper;
 class ROM implements IState
 {
 	@:state public var name:String;
-	@:state public var gbc:Bool;
-	@:state public var sgb:Bool;
-	@:state public var cartType:Int;
-	@:state public var japan:Bool;
-	@:state public var version:Int;
-	@:state public var checksum:Int;
-	@:state public var globalChecksum:Int;
-	@:state public var hasSram:Bool;
+	public var gbc:Bool;
+	public var sgb:Bool;
+	public var cartType:Int;
+	public var japan:Bool;
+	public var version:Int;
+	public var checksum:Int;
+	public var globalChecksum:Int;
+	public var hasSram:Bool;
 
 	@:state public var romSize:Int;
 	@:state public var ramSize:Int;
@@ -44,8 +44,8 @@ class ROM implements IState
 		cartType = fixedRom[0x147];
 		hasSram = switch(cartType)
 		{
-			case 0x02, 0x03, 0x08, 0x09, 0x0c, 0x0d, 0x10, 0x12,
-				0x13, 0x16, 0x17, 0x1a, 0x1b, 0x1d, 0x1e, 0xff:
+			case 0x03, 0x06, 0x09, 0x0d, 0x0f, 0x10, 0x13, 0x17,
+				0x1b, 0x1e, 0xff:
 				true;
 			default:
 				false;

@@ -47,10 +47,10 @@ class GB implements IEmulator implements IState
 		rom = new ROM(gameData);
 		memory = new Memory(rom);
 
-		reset();
-
 		romName = gameData.name;
 		this.useSram = useSram;
+
+		reset();
 	}
 
 	public function reset():Void
@@ -145,6 +145,7 @@ class GB implements IEmulator implements IState
 			var file = io.readFile(romName + ".srm");
 			if (file != null)
 			{
+				trace(memory.ramBanks);
 				for (bank in memory.ramBanks)
 				{
 					bank.readFrom(file);
