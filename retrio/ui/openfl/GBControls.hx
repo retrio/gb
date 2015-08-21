@@ -1,6 +1,7 @@
 package retrio.ui.openfl;
 
 import retrio.config.SettingCategory;
+import retrio.config.CustomSetting;
 import retrio.emu.gb.GBControllerButton;
 import retrio.ui.haxeui.ControllerSettingsPage;
 import retrio.ui.openfl.controllers.*;
@@ -29,7 +30,7 @@ class GBControls
 	public static function settings(plugin:GBPlugin):Array<SettingCategory>
 	{
 		return [
-			{id: "controls", name: "Controls", custom: {
+			{id: "controls", name: "Controls", custom: new CustomSetting({
 				render:ControllerSettingsPage.render.bind(
 					plugin,
 					controllerImg,
@@ -37,8 +38,10 @@ class GBControls
 					GBControllerButton.buttonNames,
 					ControllerInfo.controllerTypes
 				),
-				save:ControllerSettingsPage.save.bind(plugin)
-			}},
+				save:ControllerSettingsPage.save.bind(plugin),
+				serialize:ControllerSettingsPage.serialize.bind(plugin),
+				unserialize:ControllerSettingsPage.unserialize.bind(plugin, ControllerInfo.controllerTypes),
+			})},
 		];
 	}
 }

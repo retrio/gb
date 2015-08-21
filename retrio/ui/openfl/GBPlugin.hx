@@ -21,8 +21,10 @@ import retrio.emu.gb.Palette;
 @:access(retrio.emu.gb.GB)
 class GBPlugin extends EmulatorPlugin
 {
+	public static var _name:String = "gb";
+
 	static inline var AUDIO_BUFFER_SIZE:Int = 0x800;
-	static var _registered = Shell.registerPlugin("gb", new GBPlugin());
+	static var _registered = Shell.registerPlugin(_name, new GBPlugin());
 
 	var _stage(get, never):flash.display.Stage;
 	inline function get__stage() return Lib.current.stage;
