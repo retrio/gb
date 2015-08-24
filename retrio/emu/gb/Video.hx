@@ -386,7 +386,7 @@ class Video implements IState
 				value = bgDisplay ? tileBuffer[(tile << 6) + (y << 3) + (x)] : 0;
 				_bg[i] = value == 0;
 				color = bgPalette[value];
-				screenBuffer.pset(bufferOffset++, color);
+				pset(bufferOffset++, color);
 				if (++x == 8)
 				{
 					x = 0;
@@ -415,7 +415,7 @@ class Video implements IState
 				value = tileBuffer[(tile << 6) + (y << 3) + (x)];
 				_bg[i] = value == 0;
 				color = bgPalette[value];
-				screenBuffer.pset(bufferOffset++, color);
+				pset(bufferOffset++, color);
 				if (++x == 8)
 				{
 					x = 0;
@@ -431,7 +431,7 @@ class Video implements IState
 			// nothing is visible
 			for (i in 0 ... 160)
 			{
-				screenBuffer.pset(bufferOffset + i, bgPalette[0]);
+				pset(bufferOffset + i, bgPalette[0]);
 				_bg[i] = false;
 			}
 		}
@@ -467,7 +467,7 @@ class Video implements IState
 							{
 								displayed = true;
 								color = pal[value];
-								screenBuffer.pset(bufferOffset+xi, color);
+								pset(bufferOffset+xi, color);
 								_spritePriority[x + xi] = x;
 							}
 						}
@@ -506,5 +506,10 @@ class Video implements IState
 				(Util.getbit(vram[addr+1], 7-x) ? 2 : 0)
 			);
 		}
+	}
+
+	inline function pset(addr:Int, value:Int)
+	{
+		screenBuffer.pset(addr, gb.getColor(value));
 	}
 }

@@ -24,7 +24,6 @@ class GB implements IEmulator implements IState
 	public var screenBuffer(default, set):IScreenBuffer;
 	function set_screenBuffer(screenBuffer:IScreenBuffer)
 	{
-		screenBuffer.colorTransform = getColor;
 		return this.screenBuffer = screenBuffer;
 	}
 
@@ -103,7 +102,7 @@ class GB implements IEmulator implements IState
 		controller.controller = null;
 	}
 
-	public function getColor(c:Int)
+	public inline function getColor(c:Int)
 	{
 		return palette.getColor(c);
 	}
