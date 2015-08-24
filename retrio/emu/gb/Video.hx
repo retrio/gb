@@ -1,6 +1,7 @@
 package retrio.emu.gb;
 
 import haxe.ds.Vector;
+import retrio.io.IScreenBuffer;
 
 
 @:enum
@@ -27,10 +28,11 @@ typedef SpriteInfo = {
 @:build(retrio.macro.Optimizer.build())
 class Video implements IState
 {
+	public var gb:GB;
 	public var cpu:CPU;
 	public var memory:Memory;
-
-	public var screenBuffer:ByteString = new ByteString(160 * 144);
+	var screenBuffer(get, never):IScreenBuffer;
+	inline function get_screenBuffer() return gb.screenBuffer;
 
 	@:state public var oam:ByteString;		// object attribute memory
 	@:state public var vram:ByteString;		// video RAM
@@ -116,13 +118,12 @@ class Video implements IState
 		tileBuffer = new ByteString(0x8000);
 		tileBuffer.fillWith(0);
 
-		screenBuffer.fillWith(0);
-
 		for (i in 0 ... 40) spriteInfo[i] = {x:0, y:0, tile:0, palette:false, xflip:false, yflip:false, behindBg:false};
 	}
 
-	public function init(cpu:CPU, memory:Memory)
+	public function init(gb:GB, cpu:CPU, memory:Memory)
 	{
+		this.gb = gb;
 		this.cpu = cpu;
 		this.memory = memory;
 	}
@@ -385,7 +386,7 @@ class Video implements IState
 				value = bgDisplay ? tileBuffer[(tile << 6) + (y << 3) + (x)] : 0;
 				_bg[i] = value == 0;
 				color = bgPalette[value];
-				screenBuffer[bufferOffset++] = color;
+				screenBuffer.pset(bufferOffset++, color);
 				if (++x == 8)
 				{
 					x = 0;
@@ -414,7 +415,7 @@ class Video implements IState
 				value = tileBuffer[(tile << 6) + (y << 3) + (x)];
 				_bg[i] = value == 0;
 				color = bgPalette[value];
-				screenBuffer[bufferOffset++] = color;
+				screenBuffer.pset(bufferOffset++, color);
 				if (++x == 8)
 				{
 					x = 0;
@@ -430,7 +431,7 @@ class Video implements IState
 			// nothing is visible
 			for (i in 0 ... 160)
 			{
-				screenBuffer[bufferOffset + i] = bgPalette[0];
+				screenBuffer.pset(bufferOffset + i, bgPalette[0]);
 				_bg[i] = false;
 			}
 		}
@@ -466,7 +467,7 @@ class Video implements IState
 							{
 								displayed = true;
 								color = pal[value];
-								screenBuffer[bufferOffset+xi] = color;
+								screenBuffer.pset(bufferOffset+xi, color);
 								_spritePriority[x + xi] = x;
 							}
 						}

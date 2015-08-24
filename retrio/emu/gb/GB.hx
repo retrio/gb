@@ -3,6 +3,7 @@ package retrio.emu.gb;
 import haxe.io.BytesInput;
 import retrio.io.FileWrapper;
 import retrio.io.IEnvironment;
+import retrio.io.IScreenBuffer;
 
 
 class GB implements IEmulator implements IState
@@ -19,8 +20,13 @@ class GB implements IEmulator implements IState
 	public var height:Int = HEIGHT;
 
 	public var io:IEnvironment;
-	public var buffer:ByteString;
 	public var extensions:Array<String> = ["*.gb"];
+	public var screenBuffer(default, set):IScreenBuffer;
+	function set_screenBuffer(screenBuffer:IScreenBuffer)
+	{
+		screenBuffer.colorTransform = getColor;
+		return this.screenBuffer = screenBuffer;
+	}
 
 	// hardware components
 	public var cpu:CPU;
@@ -59,10 +65,8 @@ class GB implements IEmulator implements IState
 		video = new Video();
 		audio = new Audio();
 
-		buffer = video.screenBuffer;
-
 		memory.init(cpu, video, audio, controller);
-		video.init(cpu, memory);
+		video.init(this, cpu, memory);
 		audio.init(cpu, memory);
 		cpu.init(memory, video, audio);
 		memory.writeInitialState();
@@ -145,7 +149,6 @@ class GB implements IEmulator implements IState
 			var file = io.readFile(romName + ".srm");
 			if (file != null)
 			{
-				trace(memory.ramBanks);
 				for (bank in memory.ramBanks)
 				{
 					bank.readFrom(file);

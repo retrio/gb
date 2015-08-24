@@ -11,7 +11,6 @@ import flash.events.TimerEvent;
 import flash.geom.Rectangle;
 import flash.geom.Matrix;
 import flash.utils.ByteArray;
-import flash.utils.Endian;
 import retrio.config.GlobalSettings;
 import retrio.emu.gb.GB;
 import retrio.emu.gb.Settings;
@@ -31,13 +30,7 @@ class GBPlugin extends EmulatorPlugin
 
 	var gb:GB;
 
-	var bmp:Bitmap;
-	var canvas:BitmapData;
-	var bmpData:BitmapData;
-	var m:Matrix = new Matrix();
-	var pixels:ByteArray = new ByteArray();
 	var frameCount = 0;
-	var r = new Rectangle(0, 0, GB.WIDTH, GB.HEIGHT);
 	var screenDirty:Bool = false;
 
 	public function new()
@@ -47,6 +40,8 @@ class GBPlugin extends EmulatorPlugin
 		controllers = new Vector(1);
 
 		this.emu = this.gb = new GB();
+		screenBuffer = new BitmapScreenBuffer(GB.WIDTH, GB.HEIGHT);
+
 		this.settings = GlobalSettings.settings.concat(
 			retrio.emu.gb.Settings.settings
 		).concat(
@@ -54,12 +49,7 @@ class GBPlugin extends EmulatorPlugin
 		);
 		extensions = gb.extensions;
 
-		bmpData = new BitmapData(GB.WIDTH, GB.HEIGHT, false, 0);
-
-		pixels.endian = Endian.BIG_ENDIAN;
-		pixels.clear();
-		for (i in 0 ... GB.WIDTH*GB.HEIGHT*4)
-			pixels.writeByte(0);
+		if (Std.is(screenBuffer, Bitmap)) addChildAt(cast(screenBuffer, Bitmap), 0);
 	}
 
 	override public function resize(width:Int, height:Int)
@@ -67,15 +57,8 @@ class GBPlugin extends EmulatorPlugin
 		if (width == 0 || height == 0)
 			return;
 
-		if (bmp != null)
-		{
-			removeChild(bmp);
-			canvas.dispose();
-			bmp = null;
-			canvas = null;
-		}
-
-		initScreen(width, height);
+		screenBuffer.resize(width, height);
+		initialized = true;
 	}
 
 	override public function frame()
@@ -98,21 +81,7 @@ class GBPlugin extends EmulatorPlugin
 
 		if (running || screenDirty)
 		{
-			var bm = gb.buffer;
-			for (i in 0 ... GB.WIDTH * GB.HEIGHT)
-			{
-				Memory.setI32(i*4, gb.palette.getColor(bm.get(i)));
-			}
-
-			pixels.position = 0;
-
-			bmpData.lock();
-			canvas.lock();
-			bmpData.setPixels(r, pixels);
-			canvas.draw(bmpData, m, null, null, null, smooth);
-			canvas.unlock();
-			bmpData.unlock();
-
+			screenBuffer.render();
 			screenDirty = false;
 		}
 	}
@@ -120,7 +89,6 @@ class GBPlugin extends EmulatorPlugin
 	override public function activate()
 	{
 		super.activate();
-		Memory.select(pixels);
 	}
 
 	override public function deactivate()
@@ -129,25 +97,6 @@ class GBPlugin extends EmulatorPlugin
 		gb.audio.buffer1.clear();
 		gb.audio.buffer2.clear();
 		gb.saveSram();
-	}
-
-	function initScreen(width:Int, height:Int)
-	{
-		canvas = new BitmapData(width, height, false, 0);
-		bmp = new Bitmap(canvas);
-		addChildAt(bmp, 0);
-
-		var sx = canvas.width / GB.WIDTH, sy = canvas.height / (GB.HEIGHT);
-		m.setTo(sx, 0, 0, sy, 0, 0);
-
-		initialized = true;
-	}
-
-	override public function capture()
-	{
-		var capture = new BitmapData(bmpData.width, bmpData.height);
-		capture.copyPixels(bmpData, capture.rect, new flash.geom.Point());
-		return capture;
 	}
 
 	var _buffering:Bool = true;
